@@ -6,6 +6,42 @@ The project keeps the upstream USB HID implementation and command-line tool as i
 
 > **Please preserve upstream attribution.** The original project and its contributors made the core device integration possible. This derivative retains the upstream GPL license and source attribution. See [`LICENSE`](LICENSE).
 
+## Some pictures: 
+
+<table align="center">
+  <!-- First Row -->
+  <tr>
+    <td align="center" width="33%">
+      <img src="https://github.com/user-attachments/assets/08087e53-ac59-4d96-aae2-86bff951c585" alt="Ekran Görüntüsü 1" style="max-height: 200px; width: auto;"/><br />
+      <sub><b>SS 1</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="https://github.com/user-attachments/assets/fb2c1cee-2b0d-46e3-b5f1-37fb7fe9b70e" alt="Ekran Görüntüsü 2" style="max-height: 200px; width: auto;"/><br />
+      <sub><b>SS 2</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="https://github.com/user-attachments/assets/e9859914-d039-4977-921e-a2932d05d144" alt="Ekran Görüntüsü 3" style="max-height: 200px; width: auto;"/><br />
+      <sub><b>SS 3</b></sub>
+    </td>
+  </tr>
+  <!-- Second Row -->
+  <tr>
+    <td align="center" width="33%">
+      <img src="https://github.com/user-attachments/assets/6509c9bb-7f34-4ff1-be66-3aa4269433f9" alt="Ekran Görüntüsü 4" style="max-height: 200px; width: auto;"/><br />
+      <sub><b>SS 4</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="https://github.com/user-attachments/assets/00c89698-fb6e-40c8-aa4c-09924e6991c4" alt="Ekran Görüntüsü 5" style="max-height: 200px; width: auto;"/><br />
+      <sub><b>SS 5</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="https://github.com/user-attachments/assets/3a29fcb3-6db1-45e6-bc81-ceef59a82684" alt="Ekran Görüntüsü 6" style="max-height: 200px; width: auto;"/><br />
+      <sub><b>SS 6</b></sub>
+    </td>
+  </tr>
+</table>
+
+
 ## Features added in this derivative
 
 The GxOled system-tray application includes the following enhancements over the upstream desktop app:
@@ -41,7 +77,7 @@ The program communicates with the **USB base station**, not directly with the he
 
 ### Windows
 
-1. Download `gxoled.exe` from this repository's **Releases** page.
+1. Download `gxoled.exe` from this repository's **[Releases](https://github.com/MehmetNY/GxOled-v0.4.0/releases/tag/stable)** page.
 2. Run it. The desktop application starts in the system tray; right-click the tray icon to configure it.
 3. The CLI `gxoled-cli.exe` may also be attached to a release for users who want command-line controls.
 
@@ -158,11 +194,12 @@ This is an **unofficial derivative** of [JerwuQu/ggoled](https://github.com/Jerw
 
 If you still wish to support the maintenance of this derivative, an optional cryptocurrency donation is appreciated. There is no obligation to donate.
 
-**Wallet address:** `X` *(placeholder — replace before publishing)*
+**QR code:**
+<p align="left">
+  <img src="https://github.com/user-attachments/assets/5bea3a8b-e33e-4165-b9ac-de72813f11b1" width="150" alt="Bağış QR Kodu" />
+  <br />
+</p>
 
-**QR code:** replace the placeholder image below with a QR code for the same wallet address before publishing:
-
-![Placeholder area for the donation QR code. Replace this image before publishing.](docs/assets/donation-qr-placeholder.svg)
 
 ## Development acknowledgement
 
@@ -173,5 +210,5 @@ Development and review of this derivative received assistance from **OpenAI Chat
 This derivative retains the upstream **GNU General Public License v3.0**. See [`LICENSE`](LICENSE) for the full terms. Preserve applicable copyright notices and attribution when redistributing or modifying the source. This repository is not affiliated with SteelSeries.
 
 - Original source project: [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled)
-- GIF studio design inspiration: [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio)
+- GIF studio design inspiration for possible future work: [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio)
 - Widget inspiration for possible future work: [pozitronik/steelclock-go](https://github.com/pozitronik/steelclock-go)
