@@ -1,0 +1,27 @@
+# Rust build products and generated release artifacts
+/target/
+/dist/
+/release/
+
+# Generated Flatpak build outputs (also documented in flatpak/.gitignore)
+/flatpak/build-dir/
+/flatpak/.flatpak-builder/
+/flatpak/cargo-config.toml
+/flatpak/cargo-vendor/
+/flatpak/repo/
+/flatpak/*.flatpak
+/flatpak/shared-modules/
+
+# Local/editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local backups, logs, and compiled binaries
+*.tmp
+*.bak
+*.log
+*.exe
+*.dll
+*.pdb
