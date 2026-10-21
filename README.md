@@ -201,9 +201,6 @@ If you still wish to support the maintenance of this derivative, an optional cry
 </p>
 
 
-## Development acknowledgement
-
-Development and review of this derivative received assistance from **OpenAI ChatGPT (GPT-6)** for implementation, debugging, code review, and documentation. The project maintainer specified the requirements, integrated the changes, ran the Windows builds and tests, and tested the behavior with the physical base station. AI assistance is acknowledged transparently; release decisions and responsibility for distribution remain with the maintainer.
 
 ## License and acknowledgements
 
