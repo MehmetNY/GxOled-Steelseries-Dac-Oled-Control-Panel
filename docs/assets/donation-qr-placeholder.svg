@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" role="img" aria-labelledby="title desc">
+  <title id="title">Donation QR placeholder</title>
+  <desc id="desc">Placeholder only. Replace with a QR code for the donation wallet before publishing.</desc>
+  <rect x="1" y="1" width="758" height="298" rx="18" fill="#f7f7f7" stroke="#888" stroke-width="2" stroke-dasharray="9 7"/>
+  <rect x="26" y="26" width="244" height="244" rx="10" fill="#fff" stroke="#666" stroke-width="2"/>
+  <g fill="#d8d8d8">
+    <rect x="45" y="45" width="52" height="52"/><rect x="111" y="45" width="17" height="17"/><rect x="145" y="45" width="34" height="17"/><rect x="196" y="45" width="52" height="17"/>
+    <rect x="45" y="111" width="17" height="34"/><rect x="79" y="111" width="34" height="17"/><rect x="145" y="94" width="17" height="34"/><rect x="179" y="111" width="17" height="17"/><rect x="213" y="94" width="35" height="34"/>
+    <rect x="45" y="162" width="52" height="17"/><rect x="111" y="145" width="17" height="52"/><rect x="145" y="145" width="34" height="17"/><rect x="196" y="145" width="17" height="52"/><rect x="230" y="162" width="18" height="35"/>
+    <rect x="45" y="213" width="17" height="35"/><rect x="79" y="196" width="34" height="17"/><rect x="128" y="213" width="34" height="35"/><rect x="179" y="213" width="17" height="17"/><rect x="213" y="213" width="35" height="35"/>
+  </g>
+  <g fill="#333" font-family="Segoe UI, Arial, sans-serif">
+    <text x="310" y="96" font-size="26" font-weight="700">DONATION QR PLACEHOLDER</text>
+    <text x="310" y="139" font-size="20">Replace this graphic with the real QR</text>
+    <text x="310" y="168" font-size="20">for wallet address X before publishing.</text>
+    <text x="310" y="224" font-size="16" fill="#666">This graphic is not a valid QR code.</text>
+  </g>
+</svg>
