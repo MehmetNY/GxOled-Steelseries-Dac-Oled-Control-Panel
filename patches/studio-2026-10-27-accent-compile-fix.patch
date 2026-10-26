@@ -1,0 +1,15 @@
+--- a/gxoled_app/src/settings_window.rs
++++ b/gxoled_app/src/settings_window.rs
+@@ -920,10 +920,10 @@
+     let dark=THEME.load(Ordering::Relaxed)==1;
+     let pressed=info.item_state&ODS_SELECTED!=0;
+     let card=if dark{COLOR_CARD_BG}else{rgb(245,247,250)};
+-    let accent=if matches!(id, ID_PROFILE_SELECT|ID_EDITOR_SAVE|ID_GIF_ADD){accent_secondary()}else{accent()};
++    let accent_color=if matches!(id, ID_PROFILE_SELECT|ID_EDITOR_SAVE|ID_GIF_ADD){accent_secondary()}else{accent()};
+     let highlighted=is_active || pressed;
+     let fill=if highlighted{if dark{accent_surface()}else{rgb(215,249,246)}}else if quit{if dark{rgb(48,35,40)}else{rgb(252,233,235)}}else{card};
+-    let border=if highlighted{if dark{accent}else{rgb(13,126,137)}}else{if dark{COLOR_BORDER}else{rgb(198,209,221)}};
++    let border=if highlighted{if dark{accent_color}else{rgb(13,126,137)}}else{if dark{COLOR_BORDER}else{rgb(198,209,221)}};
+     let text_color=if dark{COLOR_DARK_TEXT}else{rgb(26,39,48)};
+     let mut area=Rect{left:info.rect.left+1,top:info.rect.top+1,
+         right:info.rect.right-1,bottom:info.rect.bottom-1};
