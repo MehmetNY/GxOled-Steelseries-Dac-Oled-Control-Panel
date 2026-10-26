@@ -1,0 +1,116 @@
+name: Build and publish GxOled Windows release
+
+# Each new release/v... branch builds and publishes its own GitHub prerelease.
+# The existing "stable" tag/release is never changed.
+on:
+  push:
+    branches:
+      - 'release/v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Unique version tag, for example v0.5.0-studio.1'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine unique version
+        id: version
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $env:INPUT_VERSION
+          } else {
+            $env:GITHUB_REF_NAME -replace '^release/', ''
+          }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+[-.][a-zA-Z0-9.-]+$') {
+            throw "Version must be a new prerelease tag like v0.5.0-studio.1 (got '$tag')."
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Verify complete sources exist
+        shell: pwsh
+        run: |
+          foreach ($path in @('Cargo.toml', 'Cargo.lock', 'gxoled_app/Cargo.toml', 'go_animations/go.mod')) {
+            if (!(Test-Path $path)) {
+              throw "Missing $path. Upload the complete GxOled source tree to this branch before releasing."
+            }
+          }
+
+      - name: Prevent replacement of existing release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release $env:RELEASE_TAG already exists; use a NEW version rather than overwriting it."
+          }
+          exit 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go_animations/go.mod
+
+      - name: Compile original Go animation helper
+        shell: pwsh
+        run: |
+          Push-Location go_animations
+          go build -o gxoled-animations.exe ./cmd/renderer
+          if ($LASTEXITCODE -ne 0) { throw 'Go animation helper build failed' }
+          Pop-Location
+
+      - name: Validate Rust
+        shell: pwsh
+        run: |
+          cargo check --locked -p gxoled_app --features sdl3-static
+          if ($LASTEXITCODE -ne 0) { throw 'cargo check failed' }
+          cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw --features gxoled_app/sdl3-static
+          if ($LASTEXITCODE -ne 0) { throw 'cargo test failed' }
+
+      - name: Build Windows release
+        shell: pwsh
+        run: |
+          cargo build --locked --release -p gxoled_app --features sdl3-static
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release build failed' }
+
+      - name: Package binaries and source
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item target/release/gxoled.exe dist/gxoled.exe
+          git archive --format=zip --output="dist/GxOled-$env:RELEASE_TAG-source.zip" HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source ZIP creation failed' }
+          Get-FileHash dist/gxoled.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  gxoled.exe" } | Set-Content dist/SHA256SUMS.txt
+
+      - name: Publish NEW prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/gxoled.exe
+            dist/GxOled-*-source.zip
+            dist/SHA256SUMS.txt
