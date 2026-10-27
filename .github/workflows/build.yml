@@ -44,6 +44,12 @@ jobs:
         run: cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw --features gxoled_app/sdl3-static
       - name: Build desktop app with SDL3 static
         run: cargo build --locked --release -p gxoled_app --features sdl3-static
+      - name: Upload Windows test executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: GxOled-Advanced-v0.5.0-mediafix-Windows-x64
+          path: target/release/gxoled.exe
+          if-no-files-found: error
 
   windows-build:
     name: Windows GNU cross-build
