@@ -412,6 +412,10 @@ fn run_draw_device_thread(
         .map(Duration::from_millis)
         .unwrap_or(VOLUME_OSD_HOLD);
     let osd_legacy = std::env::var("GXOLED_OSD_LEGACY").ok().as_deref() == Some("1");
+    // Opt-in, bounded test. During the first 7s after a physical dial event,
+    // resend the current valid OLED frame every 100ms instead of every second.
+    // Do not change pixel data or send undocumented HID commands.
+    let osd_pulse = std::env::var("GXOLED_OSD_PULSE").ok().as_deref() == Some("1");
     let osd_log = |message: &str| {
         if let Some(path) = &osd_trace_file {
             use std::io::Write;
@@ -421,8 +425,10 @@ fn run_draw_device_thread(
             }
         }
     };
-    osd_log(&format!("START hold_ms={} legacy={} fps={}", osd_hold.as_millis(), osd_legacy, fps));
+    osd_log(&format!("START hold_ms={} legacy={} pulse={} fps={}",
+        osd_hold.as_millis(), osd_legacy, osd_pulse, fps));
     let mut osd_trace_remaining_frames = 0u8;
+    let mut last_accepted_volume_event: Option<Instant> = None;
     loop {
         let time = Instant::now();
         let mut stop_after_frame = false;
@@ -494,6 +500,7 @@ fn run_draw_device_thread(
                     _ => {}
                 }
                 if arm {
+                    last_accepted_volume_event = Some(event_time);
                     volume_osd_started.get_or_insert(event_time);
                     volume_osd_until = Some(event_time + osd_hold);
                     osd_trace_remaining_frames = 3;
@@ -634,7 +641,17 @@ fn run_draw_device_thread(
 
             // Draw update
             let frame_time = Instant::now();
-            let force_redraw = frame_time.duration_since(last_frame_time) >= Duration::from_secs(1);
+            // Diagnostic pulse: 10 Hz for a bounded seven-second period after
+            // physical knob movement; outside that period, keep 1 Hz heartbeat.
+            let recent_dial_pulse = osd_pulse && last_accepted_volume_event.is_some_and(|last| {
+                frame_time.saturating_duration_since(last) < Duration::from_secs(7)
+            });
+            let heartbeat = if recent_dial_pulse {
+                Duration::from_millis(100)
+            } else {
+                Duration::from_secs(1)
+            };
+            let force_redraw = frame_time.duration_since(last_frame_time) >= heartbeat;
             if screen != prev_screen || force_redraw {
                 last_frame_time = frame_time;
                 let draw_start = Instant::now();
@@ -647,8 +664,8 @@ fn run_draw_device_thread(
                     }
                 } else {
                     if osd_trace_remaining_frames > 0 {
-                        osd_log(&format!("FRAME_OK write_ms={} after_hold=true",
-                            draw_start.elapsed().as_millis()));
+                        osd_log(&format!("FRAME_OK write_ms={} after_hold=true pulse={}",
+                            draw_start.elapsed().as_millis(), recent_dial_pulse));
                         osd_trace_remaining_frames -= 1;
                     }
                     prev_screen = screen;
