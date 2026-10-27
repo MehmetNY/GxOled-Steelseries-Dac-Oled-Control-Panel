@@ -1,0 +1,15 @@
+[package]
+name = "gxoled_draw"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+gxoled_lib = { path = "../gxoled_lib" }
+
+anyhow = "1.0"
+serde = { version = "1", features = ["derive"] }
+chrono = "0.4"
+image = { version = "0.25", features = ["gif"] }
+parking_lot = "0.12"
+rusttype = "0.9"
+spin_sleep = "1.3"

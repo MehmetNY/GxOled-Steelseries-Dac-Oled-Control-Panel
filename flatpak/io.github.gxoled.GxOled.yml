@@ -1,0 +1,41 @@
+app-id: io.github.gxoled.GxOled
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: gxoled
+
+finish-args:
+  # USB access
+  - --device=all
+  # System tray
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # MPRIS
+  - --talk-name=org.mpris.MediaPlayer2.*
+  # Display
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+
+modules:
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
+  - name: gxoled
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/gxoled/cargo
+    build-commands:
+      - mkdir -p $CARGO_HOME
+      - cp flatpak/cargo-config.toml $CARGO_HOME/config.toml
+      - cargo build --release --locked --features sdl3-static --offline
+      - install -Dm755 target/release/gxoled-cli /app/bin/gxoled-cli
+      - install -Dm755 target/release/gxoled /app/bin/gxoled
+      - install -Dm644 flatpak/io.github.gxoled.GxOled.desktop /app/share/applications/io.github.gxoled.GxOled.desktop
+      - install -Dm644 flatpak/io.github.gxoled.GxOled.metainfo.xml /app/share/metainfo/io.github.gxoled.GxOled.metainfo.xml
+      - install -Dm644 gxoled_app/assets/gxoled.png /app/share/icons/hicolor/128x128/apps/io.github.gxoled.GxOled.png
+    sources:
+      - type: dir
+        path: ..

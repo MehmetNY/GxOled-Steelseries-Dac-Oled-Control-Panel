@@ -1,3 +1,5 @@
+**Experimental SteelClock-Go widget + native settings window branch:** see [INTEGRATION_NOTES_TR.md](INTEGRATION_NOTES_TR.md). The Go renderer is embedded, but Rust/Windows builds and device behavior have not been verified in this environment.
+
 # GxOled — SteelSeries Base Station OLED Enhancements (v0.4.0)
 
 **A community-maintained desktop-app enhancement of [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled).** GxOled is a separately maintained application derived from the upstream source; its maintainer does not own or represent the upstream repository. It is an unofficial derivative, not an official upstream release, and it is not affiliated with, endorsed by, or sponsored by SteelSeries.
@@ -5,42 +7,6 @@
 The project keeps the upstream USB HID implementation and command-line tool as its foundation, while adding desktop-app features for the 128×64 OLED on compatible SteelSeries base stations.
 
 > **Please preserve upstream attribution.** The original project and its contributors made the core device integration possible. This derivative retains the upstream GPL license and source attribution. See [`LICENSE`](LICENSE).
-
-## Some pictures: 
-
-<table align="center">
-  <!-- First Row -->
-  <tr>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/08087e53-ac59-4d96-aae2-86bff951c585" alt="Ekran Görüntüsü 1" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 1</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/fb2c1cee-2b0d-46e3-b5f1-37fb7fe9b70e" alt="Ekran Görüntüsü 2" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 2</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/e9859914-d039-4977-921e-a2932d05d144" alt="Ekran Görüntüsü 3" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 3</b></sub>
-    </td>
-  </tr>
-  <!-- Second Row -->
-  <tr>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/6509c9bb-7f34-4ff1-be66-3aa4269433f9" alt="Ekran Görüntüsü 4" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 4</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/00c89698-fb6e-40c8-aa4c-09924e6991c4" alt="Ekran Görüntüsü 5" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 5</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/3a29fcb3-6db1-45e6-bc81-ceef59a82684" alt="Ekran Görüntüsü 6" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 6</b></sub>
-    </td>
-  </tr>
-</table>
-
 
 ## Features added in this derivative
 
@@ -77,7 +43,7 @@ The program communicates with the **USB base station**, not directly with the he
 
 ### Windows
 
-1. Download `gxoled.exe` from this repository's **[Releases](https://github.com/MehmetNY/GxOled-v0.4.0/releases/tag/stable)** page.
+1. Download `gxoled.exe` from this repository's **Releases** page.
 2. Run it. The desktop application starts in the system tray; right-click the tray icon to configure it.
 3. The CLI `gxoled-cli.exe` may also be attached to a release for users who want command-line controls.
 
@@ -194,18 +160,47 @@ This is an **unofficial derivative** of [JerwuQu/ggoled](https://github.com/Jerw
 
 If you still wish to support the maintenance of this derivative, an optional cryptocurrency donation is appreciated. There is no obligation to donate.
 
-**QR code:**
-<p align="left">
-  <img src="https://github.com/user-attachments/assets/5bea3a8b-e33e-4165-b9ac-de72813f11b1" width="150" alt="Bağış QR Kodu" />
-  <br />
-</p>
+**USDT network:** TRON (TRC20)
 
+**Wallet address:** `TMJhuudyrGRj4V6r54dNN3983RkgTeXwqK`
 
+**Donation QR code:** provided by the maintainer and embedded in the About page:
+
+![USDT donation QR supplied by the publisher (TRON / TRC20)](gxoled_app/assets/donation-usdt-tron.png)
+
+## Development acknowledgement
+
+Development and review of this derivative received assistance from **OpenAI ChatGPT (GPT-6)** for implementation, debugging, code review, and documentation. The project maintainer specified the requirements, integrated the changes, ran the Windows builds and tests, and tested the behavior with the physical base station. AI assistance is acknowledged transparently; release decisions and responsibility for distribution remain with the maintainer.
 
 ## License and acknowledgements
 
 This derivative retains the upstream **GNU General Public License v3.0**. See [`LICENSE`](LICENSE) for the full terms. Preserve applicable copyright notices and attribution when redistributing or modifying the source. This repository is not affiliated with SteelSeries.
 
 - Original source project: [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled)
-- GIF studio design inspiration for possible future work: [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio)
+- GIF studio design inspiration: [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio)
 - Widget inspiration for possible future work: [pozitronik/steelclock-go](https://github.com/pozitronik/steelclock-go)
+
+> The About page uses the publisher-supplied USDT/TRON QR image bundled at `gxoled_app/assets/donation-usdt-tron.png`. It is not an end-user setting.
+
+
+## Native Windows settings (experimental UI revision)
+
+The 128×64 Windows settings window now supports scrolling on small displays, dark/light mode, brightness, OLED shift and burn-in controls, media layouts, and file-backed animation presets. Use **Animations → New copy / Import / Export / Edit** to manage configurations. Custom presets are stored under `%APPDATA%\GxOled\profiles\custom`. Only the original four animation engines are accepted; profiles must target exactly one widget at 128×64. For the complete scope and limitations see [UI_REVISION_TR.md](UI_REVISION_TR.md).
+
+Run `Validate-Windows.cmd` before publishing any build. Windows compile and OLED hardware behavior still require verification on a Windows machine.
+
+
+### Native settings UI update (2026-10-24)
+
+The native Windows settings now has a separate **GIF Studio** section for existing GIF playback controls, supports **New Profile** from an empty JSON in the animation editor, and implements **Ctrl+A** there. See [`UI_GIF_REVISION_TR.md`](UI_GIF_REVISION_TR.md) for behavior and validation instructions. The GIF editing engine is **not yet** integrated from GGIF-Studio.
+
+
+## GIF Studio editor (development branch)
+
+Windows settings → GIF Studio → **Open GIF Studio Editor** opens an embedded,
+local-only layer/timeline editor. It can import GIFs and images (video support
+requires browser decoding), render a 128×64 1-bit GIF, export a self-contained
+project, and send the exported GIF back to the existing GxOled Classic player
+via an authenticated loopback socket. This keeps the direct HID writer singular.
+The UI is a new editor inspired by D4rkTT/GGIF-Studio; it is **not an exact
+Electron port**. See `STUDIO_EDITOR_INTEGRATION_TR.md` and its testing caveats.

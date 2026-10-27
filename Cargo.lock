@@ -760,6 +760,7 @@ dependencies = [
  "rfd",
  "sdl3-sys",
  "serde",
+ "serde_json",
  "toml",
  "wayland-client",
  "wayland-protocols",
@@ -778,6 +779,7 @@ dependencies = [
  "image",
  "parking_lot",
  "rusttype",
+ "serde",
  "spin_sleep",
 ]
 

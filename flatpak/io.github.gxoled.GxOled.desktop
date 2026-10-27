@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=GxOled
+Comment=GxOled - SteelSeries Base Station OLED application
+Exec=gxoled
+Terminal=false
+Icon=io.github.gxoled.GxOled
+Type=Application
+Categories=Utility;
