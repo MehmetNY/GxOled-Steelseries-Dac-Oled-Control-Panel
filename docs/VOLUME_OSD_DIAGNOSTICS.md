@@ -47,3 +47,17 @@ Repeat **only `no-hold`** with SteelSeries GG **fully exited using the system-tr
 - If multiple GxOled-related processes appear: isolate process conflicts before altering DAC firmware logic. The launch helper already refuses to run when it detects an active GxOled instance.
 
 This remains diagnostic work; leave the v0.5.1 stable Release unchanged until a physically verified solution exists.
+
+## Fourth A/B trial: bounded OLED frame pulse
+
+The user verified that with SteelSeries GG **entirely closed**, `no-hold` still takes 6+ seconds visually. The `pulse` mode therefore isolates a different hypothesis: the Nova firmware might not relinquish priority to 1Hz custom writes while the native volume OSD is active, but may respond to more frequent *valid* writes.
+
+```powershell
+.\Test-VolumeOSD.ps1 -ExePath '.\gxoled.exe' -Mode pulse
+```
+
+This mode sends valid 0x93 bitmap frames at **at most 10 Hz for up to 7 seconds after the last dial event**, then falls back to the normal 1Hz heartbeat. It sends no undocumented command and changes no DAC configuration or persistent settings. With SteelSeries GG still closed, turn the knob briefly once and measure until GxOled visibly returns. Record whether it returns immediately, after 2-3s, or after ~6s. Some brief screen contention/flicker is possible during this diagnostic test.
+
+Additionally, with GxOled **completely exited** (not just hiding the settings window), time how long the **DAC's own** volume-screen overlay stays visible after turning the dial. That baseline is essential for distinguishing the firmware's native overlay lifetime from application behavior. Do not infer physical display changes from `FRAME_OK`: it is only an acknowledged USB write.
+
+If `pulse` still takes ~6 seconds despite `FRAME_OK` writes at 100ms intervals, reducing the app timer or increasing redraw frequency further will not be a credible solution. Investigate firmware-native display priority, DAC menu options/firmware changes, and baseline native OSD timing instead. Protect all stable releases until hardware-verified.
