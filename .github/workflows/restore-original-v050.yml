@@ -1,0 +1,84 @@
+name: Verify and publish original GxOled Advanced v0.5.0
+
+on:
+  push:
+    branches:
+      - release/v0.5.0-advanced
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: original-gxoled-v050-release
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    name: Verify original UI, build and replace releases
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the ORIGINAL settings window source
+        shell: pwsh
+        run: |
+          $ui = Get-Content 'gxoled_app/src/settings_window.rs' -Raw
+          foreach ($term in @('GENERAL CONTROL','CLOCK GALLERY','LIVE OLED','MONOCHROME')) {
+            if (-not $ui.Contains($term)) { throw "Missing original UI marker: $term" }
+          }
+          if ($ui.Contains('OLED CONTROL CENTER')) { throw 'The unwanted card-based redesign is present.' }
+          if (-not (Test-Path 'go_animations/gxoled-animations.exe')) { throw 'Original embedded Go helper is missing.' }
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Cargo check
+        run: cargo check --locked -p gxoled_app --features sdl3-static
+      - name: Unit tests
+        run: cargo test --locked -p gxoled_draw -p gxoled_app --features gxoled_app/sdl3-static
+      - name: Release build
+        run: cargo build --locked --release -p gxoled_app --features sdl3-static
+      - name: Package original-UI Windows binary and exact source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          Copy-Item 'target/release/gxoled.exe' 'artifacts/gxoled.exe'
+          git archive --format=zip '--output=artifacts/GxOled-Advanced-v0.5.0-Source.zip' HEAD
+          Compress-Archive -Path 'artifacts/gxoled.exe','README.md','LICENSE' -DestinationPath 'artifacts/GxOled-Advanced-v0.5.0-Windows-x64.zip' -Force
+          $names = @('gxoled.exe', 'GxOled-Advanced-v0.5.0-Source.zip', 'GxOled-Advanced-v0.5.0-Windows-x64.zip')
+          $checksums = @()
+          foreach ($name in $names) {
+            $hash = (Get-FileHash "artifacts/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+            $checksums += "$hash  $name"
+          }
+          $checksums | Set-Content 'artifacts/SHA256SUMS.txt' -Encoding ascii
+          @'
+          GxOled Advanced v0.5.0
+
+          Restored ORIGINAL settings UI: GENERAL CONTROL, CLOCK GALLERY, LIVE OLED / MONOCHROME.
+          No card-based UI redesign and no added GIF Studio functionality.
+          Windows Cargo check, unit tests, and optimized release build passed.
+          The original Go animation helper is embedded at build time.
+
+          Stable v0.4.0 release is retained. All other previous GitHub Releases are removed.
+          '@ | Set-Content 'artifacts/RELEASE_NOTES.txt' -Encoding UTF8
+      - name: Preserve validated source and Windows EXE as Actions artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gxoled-original-v050-verified
+          path: |
+            artifacts/gxoled.exe
+            artifacts/GxOled-Advanced-v0.5.0-Source.zip
+            artifacts/GxOled-Advanced-v0.5.0-Windows-x64.zip
+            artifacts/SHA256SUMS.txt
+      - name: Delete all earlier GitHub Releases except v0.4.0 stable, then publish corrected v0.5.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          foreach ($release in $releases) {
+            if ($release.tag_name -eq 'stable') { continue }
+            Write-Host "Removing old release: $($release.tag_name)"
+            gh release delete $release.tag_name --yes --cleanup-tag
+            if ($LASTEXITCODE -ne 0) { throw "Cannot remove old release: $($release.tag_name)" }
+          }
+          gh release create v0.5.0 'artifacts/gxoled.exe' 'artifacts/GxOled-Advanced-v0.5.0-Source.zip' 'artifacts/GxOled-Advanced-v0.5.0-Windows-x64.zip' 'artifacts/SHA256SUMS.txt' --target "$env:GITHUB_SHA" --title 'GxOled Advanced v0.5.0' --notes-file 'artifacts/RELEASE_NOTES.txt' --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing corrected v0.5.0 failed.' }

@@ -7,17 +7,6 @@ use super::{MenuEvent, ConfigClockStyle, ConfigUiMode, ConfigLanguage, ConfigThe
 
 type Handle = *mut c_void;
 const WM_ERASEBKGND: u32 = 0x0014;
-const WM_DRAWITEM: u32 = 0x002b;
-const WM_GETMINMAXINFO: u32 = 0x0024;
-const WM_GETFONT: u32 = 0x0031;
-const BS_OWNERDRAW: u32 = 0x000b;
-const ODS_SELECTED: u32 = 0x0001;
-const DT_CENTER: u32 = 0x0001;
-const DT_VCENTER: u32 = 0x0004;
-const DT_SINGLELINE: u32 = 0x0020;
-const DT_END_ELLIPSIS: u32 = 0x00008000;
-const TRANSPARENT: i32 = 1;
-
 const WM_CTLCOLORSTATIC: u32 = 0x0138;
 const WM_CTLCOLORBTN: u32 = 0x0135;
 const WM_CTLCOLOREDIT: u32 = 0x0133;
@@ -84,10 +73,10 @@ const WS_OVERLAPPEDWINDOW: u32 = 0x00CF_0000;
 const WS_CAPTION: u32 = 0x00C0_0000;
 const WS_SYSMENU: u32 = 0x0008_0000;
 const WS_MINIMIZEBOX: u32 = 0x0002_0000;
-const SETTINGS_WIDTH: i32 = 950;
-const SETTINGS_HEIGHT: i32 = 670;
-const SETTINGS_LEFT: i32 = 186;
-const SETTINGS_FORM: i32 = 340;
+const SETTINGS_WIDTH: i32 = 1050;
+const SETTINGS_HEIGHT: i32 = 710;
+const SETTINGS_LEFT: i32 = 184;
+const SETTINGS_FORM: i32 = 417;
 const WS_VISIBLE: u32 = 0x1000_0000;
 const WS_CHILD: u32 = 0x4000_0000;
 const WS_CLIPSIBLINGS:u32=0x0400_0000;
@@ -95,6 +84,14 @@ const WS_TABSTOP: u32 = 0x0001_0000;
 const WM_CLOSE: u32 = 0x0010;
 const WM_COMMAND: u32 = 0x0111;
 const WM_PAINT: u32 = 0x000f;
+const WM_DRAWITEM: u32 = 0x002b;
+const WM_GETMINMAXINFO: u32 = 0x0024;
+const BS_OWNERDRAW: u32 = 0x000b;
+const ODS_SELECTED: u32 = 0x0001;
+const DT_CENTER:u32=0x0001;
+const DT_VCENTER:u32=0x0004;
+const DT_SINGLELINE:u32=0x0020;
+const DT_END_ELLIPSIS:u32=0x00008000;
 const WM_SETFONT: u32 = 0x0030;
 const WM_CHAR:u32=0x0102;
 const EM_SETSEL:u32=0x00B1;
@@ -113,18 +110,9 @@ const EM_SETLIMITTEXT:u32=0x00c5;
 const BM_SETCHECK: u32 = 0x00f1;
 const BST_CHECKED: usize = 1;
 const SW_HIDE: i32 = 0;
-// Win32 COLORREF is stored as BGR, not RGB.
-const fn rgb(r:u8,g:u8,b:u8)->u32 {(b as u32)<<16 | (g as u32)<<8 | (r as u32)}
-const COLOR_DARK_BG: u32 = rgb(13,16,21);
-const COLOR_CARD_BG: u32 = rgb(27,31,39);
-const COLOR_SIDEBAR: u32 = rgb(19,23,29);
-const COLOR_EDITOR_BG:u32 = rgb(19,23,31);
-const COLOR_DARK_TEXT: u32 = rgb(232,241,244);
-const COLOR_MUTED: u32 = rgb(150,169,183);
-const COLOR_CYAN: u32 = rgb(43,225,211);
-const COLOR_PURPLE: u32 = rgb(193,100,242);
-const COLOR_BORDER: u32 = rgb(54,64,76);
-const COLOR_CYAN_SURFACE: u32 = rgb(23,58,63);
+const COLOR_DARK_BG: u32 = 0x001b1918; // #18191B
+const COLOR_EDITOR_BG:u32=0x00272422; // #222427
+const COLOR_DARK_TEXT: u32 = 0x00f5f4ee;
 const SW_SHOW: i32 = 5;
 const PM_REMOVE: u32 = 1;
 const COLOR_WINDOW: usize = 5;
@@ -141,12 +129,6 @@ struct WndClass {
 }
 #[repr(C)] #[derive(Default)]
 struct Rect {left:i32, top:i32, right:i32, bottom:i32}
-#[repr(C)] struct Point {x:i32,y:i32}
-#[repr(C)] struct MinMaxInfo {reserved:Point,max_size:Point,max_position:Point,min_track_size:Point,max_track_size:Point}
-#[repr(C)] struct DrawItem {
-    ctl_type:u32,ctl_id:u32,item_id:u32,item_action:u32,item_state:u32,
-    hwnd_item:Handle,dc:Handle,rect:Rect,item_data:usize,
-}
 #[repr(C)]
 struct Paint { dc: Handle, erase:i32, rect:Rect, restore:i32, inc_update:i32, reserved:[u8;32] }
 #[repr(C)]
@@ -158,6 +140,13 @@ struct BitmapInfoHeader {
 struct BitmapInfo { header: BitmapInfoHeader, colors:[u32;1] }
 #[repr(C)]
 struct ScrollInfo { size:u32, mask:u32, min:i32, max:i32, page:u32, pos:i32, track_pos:i32 }
+#[repr(C)]
+struct WinPoint {x:i32,y:i32}
+#[repr(C)]
+struct MinMaxInfo {reserved:WinPoint,max_size:WinPoint,max_pos:WinPoint,min_track:WinPoint,max_track:WinPoint}
+#[repr(C)]
+struct DrawItem {ctl_type:u32,ctl_id:u32,item_id:u32,item_action:u32,item_state:u32,
+    hwnd_item:Handle,hdc:Handle,rect:Rect,item_data:usize}
 #[repr(C)]
 struct InitCommonControls { size:u32, classes:u32 }
 #[link(name="comctl32")]
@@ -183,8 +172,8 @@ unsafe extern "system" {
     fn CallWindowProcW(proc:isize,hwnd:Handle,message:u32,w:usize,l:isize)->isize;
     fn SetWindowTextW(hwnd:Handle,text:*const u16)->i32;
     fn GetWindowTextLengthW(hwnd:Handle)->i32;
-    fn GetDlgCtrlID(hwnd:Handle)->i32;
     fn GetWindowTextW(hwnd:Handle,text:*mut u16,max:i32)->i32;
+    fn GetDlgCtrlID(hwnd:Handle)->i32;
     fn MessageBoxW(hwnd:Handle,text:*const u16,caption:*const u16,kind:u32)->i32;
     fn GetClientRect(hwnd:Handle,rect:*mut Rect)->i32;
     fn GetSystemMetrics(index:i32)->i32;
@@ -202,7 +191,7 @@ unsafe extern "system" {
     fn SetBkMode(dc:Handle,mode:i32)->i32;
     fn SetTextColor(dc:Handle,color:u32)->u32;
     fn TextOutW(dc:Handle,x:i32,y:i32,text:*const u16,count:i32)->i32;
-    fn DrawTextW(dc:Handle,text:*const u16,count:i32,rect:*mut Rect,format:u32)->i32;
+    fn DrawTextW(dc:Handle,text:*const u16,length:i32,rect:*mut Rect,format:u32)->i32;
 }
 #[link(name="kernel32")]
 unsafe extern "system" { fn GetModuleHandleW(name:*const u16)->Handle; fn GetCurrentProcessId()->u32; }
@@ -222,11 +211,8 @@ unsafe extern "system" {
 unsafe extern "system" {
     fn CreateSolidBrush(color:u32)->Handle;
     fn CreatePen(style:i32,width:i32,color:u32)->Handle;
-    fn SelectObject(dc:Handle,object:Handle)->Handle;
-    fn RoundRect(dc:Handle,left:i32,top:i32,right:i32,bottom:i32,width:i32,height:i32)->i32;
-    fn Ellipse(dc:Handle,left:i32,top:i32,right:i32,bottom:i32)->i32;
-    fn MoveToEx(dc:Handle,x:i32,y:i32,prev:*mut Point)->i32;
-    fn LineTo(dc:Handle,x:i32,y:i32)->i32;
+    fn SelectObject(dc:Handle,obj:Handle)->Handle;
+    fn RoundRect(dc:Handle,left:i32,top:i32,right:i32,bottom:i32,ellipse_w:i32,ellipse_h:i32)->i32;
     fn SetStretchBltMode(dc:Handle,mode:i32)->i32;
     fn DeleteObject(handle:Handle)->i32;
     fn StretchDIBits(dc:Handle,dx:i32,dy:i32,dw:i32,dh:i32,sx:i32,sy:i32,sw:i32,sh:i32,
@@ -294,9 +280,9 @@ static PREV_EDITOR_PROC: AtomicIsize = AtomicIsize::new(0);
 static THEME: AtomicU8 = AtomicU8::new(1);
 static LANG: AtomicU8 = AtomicU8::new(0);
 static DARK_BRUSH: OnceLock<usize> = OnceLock::new();
-static CARD_BRUSH: OnceLock<usize> = OnceLock::new();
-static ACTIVE_PAGE: AtomicU8 = AtomicU8::new(0);
 static EDIT_BRUSH: OnceLock<usize> = OnceLock::new();
+static PANEL_BRUSH: OnceLock<usize> = OnceLock::new();
+static UI_FONT: OnceLock<usize> = OnceLock::new();
 struct Editor { hwnd:usize, edit:usize, animation:super::GoAnimation,
     target:std::path::PathBuf, title:String, controls:Vec<(u32,usize)> }
 static EDITOR: OnceLock<Mutex<Editor>> = OnceLock::new();
@@ -647,7 +633,7 @@ fn qr_geometry(s:&State,cw:i32,left:i32,form:i32,sc:i32)->(i32,i32,i32,i32){
 fn page_bottom(s:&State, sc:i32,ch:i32,cw:i32,left:i32,form:i32)->i32{
     let px=|n:i32|n*sc/100;
     let last=s.placements.iter().filter(|p|p.page==s.page && p.id!=ID_QR_METHOD && p.id!=ID_QR_HINT)
-        .map(|p|px(52+p.y-75+p.h+24)).max().unwrap_or(0);
+        .map(|p|px(115+p.y-75+p.h+24)).max().unwrap_or(0);
     if s.page==5 {
         let (_,qy,_,qh)=qr_geometry(s,cw,left,form,sc);
         last.max(qy+qh+px(115)).max(ch)
@@ -661,15 +647,15 @@ fn layout_window(){
         let Ok(mut s)=state.lock() else{return};
         let (cw,ch,left,form,sc,_)=main_layout(&s);
         let px=|n:i32|n*sc/100;
-        // Navigation order is independent from the historical page IDs.
-        // GIF Studio follows Animations, while all previous actions retain their IDs.
-        let nav_order=[200u32,201,202,206,203,204,205];
         let navigation=s.buttons.iter().filter(|(id,_)|(200..207).contains(id) || *id==371)
             .map(|(id,h)| {
-                let order=nav_order.iter().position(|n|n==id).unwrap_or(6) as i32;
-                let y=if *id==371 {ch-px(51)}else{px(66)+order*px(52)};
-                (*h,px(12),y,if *id==371 {px(118)} else {(left-px(27)).max(px(80))},
-                    if *id==371 {px(32)}else{px(42)})
+                // Visual order is General, Clock, Animations, GIF Studio, Display, Media, About.
+                // Control IDs and existing page indices intentionally remain unchanged.
+                let nav_order=match *id {200=>0,201=>1,202=>2,206=>3,203=>4,204=>5,205=>6,_=>0};
+                let step=px(49);
+                let y=if *id==371 {ch-px(53)}else{px(76)+nav_order*step};
+                let height=if *id==371 {px(32)}else{px(39)};
+                (*h,px(14),y,if *id==371 {px(128)} else {(left-px(30)).max(px(92))},height)
             }).collect::<Vec<_>>();
         let page=s.page;
         let bottom=page_bottom(&s,sc,ch,cw,left,form);
@@ -686,12 +672,12 @@ fn layout_window(){
                 (qx,y,(cw-qx-px(8)).max(1),px(24))
             }else{
                 let x=left+px(ctl.x-244);
-                let y=px(52+ctl.y-75)-scroll;
+                let y=px(115+ctl.y-75)-scroll;
                 let remaining=(form-px(ctl.x-244)-px(7)).max(1);
                 let w=if ctl.class=="STATIC" {remaining} else {px(ctl.w).min(remaining)};
                 (x,y,w,px(ctl.h))
             };
-            let visible=ctl.page==page && y+h>px(38) && y<ch-px(4) && w>0;
+            let visible=ctl.page==page && y>=px(110) && y<ch-px(10) && w>0;
             (ctl.hwnd,x,y,w,h,visible)
         }).collect::<Vec<_>>();
         (s.hwnd,navigation,controls,scroll_info)
@@ -731,15 +717,14 @@ fn layout_editor(hwnd:Handle){
     let Ok(ed)=editor.lock() else{return};
     if ed.hwnd!=hwnd as usize{return;}
     let mut r=Rect::default();unsafe{GetClientRect(hwnd,&mut r);}
-    let w=r.right.max(800);let h=r.bottom.max(400);
-    let margin=18;let toolbar=52;let gap=10;
-    let n=ed.controls.len() as i32;
-    let bw=((w-2*margin-(n-1)*gap)/n).min(170);
-    let row_width=n*bw+(n-1)*gap;
-    let left=margin+(w-2*margin-row_width)/2;
-    unsafe {SetWindowPos(ed.edit as Handle,ptr::null_mut(),margin,margin,w-2*margin,h-96,SWP_NOZORDER|SWP_NOACTIVATE);}
+    let w=r.right.max(820);let h=r.bottom.max(460);
+    let margin=18;
+    let gap=10;
+    let count=ed.controls.len() as i32;
+    let bw=((w-2*margin-(count-1)*gap)/count).max(148);
+    unsafe {SetWindowPos(ed.edit as Handle,ptr::null_mut(),margin,margin,w-2*margin,h-90,SWP_NOZORDER|SWP_NOACTIVATE);}
     for (i,(_,button)) in ed.controls.iter().enumerate(){
-        unsafe{SetWindowPos(*button as Handle,ptr::null_mut(),left+i as i32*(bw+gap),h-toolbar,
+        unsafe{SetWindowPos(*button as Handle,ptr::null_mut(),margin+i as i32*(bw+gap),h-52,
             bw,34,SWP_NOZORDER|SWP_NOACTIVATE);}
     }
 }
@@ -767,142 +752,151 @@ unsafe extern "system" fn animation_editor_proc(hwnd:Handle,msg:u32,w:usize,l:is
     else {unsafe{DefWindowProcW(hwnd,msg,w,l)}}
 }
 
-
-// Native Win32/GDI visual shell inspired by OLED creator tools:
-// dark cards, restrained cyan/purple accents and a permanent preview panel.
-// No browser, WebView, Electron process, or changes to the USB/render engine.
-fn paint_card(dc:Handle,rect:Rect,fill:u32,outline:u32,radius:i32){
-    unsafe{
+// UI drawing only. All widget handlers, OLED frames and saved preferences stay unchanged.
+// Win32 COLORREF is 0x00BBGGRR (not RGB).
+fn color(r:u8,g:u8,b:u8)->u32 {(r as u32)|((g as u32)<<8)|((b as u32)<<16)}
+fn selected_nav(id:u32)->bool {
+    let Some(state)=STATE.get() else{return false;};
+    state.try_lock().ok().is_some_and(|s|id==200+s.page as u32)
+}
+unsafe fn rounded(dc:Handle,rect:&Rect,fill:u32,border:u32,radius:i32){
+    unsafe {
         let brush=CreateSolidBrush(fill);
-        let pen=CreatePen(0,1,outline);
+        let pen=CreatePen(0,1,border);
         let old_brush=SelectObject(dc,brush);
         let old_pen=SelectObject(dc,pen);
         RoundRect(dc,rect.left,rect.top,rect.right,rect.bottom,radius,radius);
-        SelectObject(dc,old_pen);SelectObject(dc,old_brush);
-        DeleteObject(brush);DeleteObject(pen);
+        SelectObject(dc,old_pen);
+        SelectObject(dc,old_brush);
+        DeleteObject(pen);
+        DeleteObject(brush);
     }
 }
-fn paint_text(dc:Handle,x:i32,y:i32,text:&str,size:i32,weight:i32,color:u32){
-    let face=wide("Segoe UI");
-    let font=unsafe{CreateFontW(-size,0,0,0,weight,0,0,0,1,0,0,5,0,face.as_ptr())};
-    unsafe{
-        let old=if font.is_null(){ptr::null_mut()}else{SelectObject(dc,font)};
-        SetBkMode(dc,TRANSPARENT);SetTextColor(dc,color);
-        let label=wide(text);
-        TextOutW(dc,x,y,label.as_ptr(),(label.len()-1) as i32);
-        if !font.is_null(){SelectObject(dc,old);DeleteObject(font);}
+unsafe fn draw_label(dc:Handle, caption:&str,rect:&Rect,shade:u32,centered:bool){
+    let text=wide(caption);
+    let mut rc=Rect{left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom};
+    unsafe {
+        SetBkMode(dc,1);
+        SetTextColor(dc,shade);
+        let old_font=UI_FONT.get().map(|font|SelectObject(dc,*font as Handle));
+        DrawTextW(dc,text.as_ptr(),(text.len()-1) as i32,&mut rc,
+            DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|(if centered{DT_CENTER}else{0}));
+        if let Some(font)=old_font{SelectObject(dc,font);}
     }
 }
-fn paint_interface_chrome(dc:Handle,cw:i32,ch:i32,page:usize,dark:bool){
-    let bg=if dark{COLOR_DARK_BG}else{rgb(238,243,247)};
-    let card=if dark{COLOR_CARD_BG}else{rgb(255,255,255)};
-    let border=if dark{COLOR_BORDER}else{rgb(205,216,223)};
-    let foreground=if dark{COLOR_DARK_TEXT}else{rgb(34,47,58)};
-    let muted=if dark{COLOR_MUTED}else{rgb(95,112,130)};
-    unsafe{
-        let background=CreateSolidBrush(bg);
-        let rect=Rect{left:0,top:0,right:cw,bottom:ch};
-        FillRect(dc,&rect,background);DeleteObject(background);
-        let rail=CreateSolidBrush(if dark{COLOR_SIDEBAR}else{rgb(225,234,241)});
-        let rect=Rect{left:0,top:0,right:178,bottom:ch};
-        FillRect(dc,&rect,rail);DeleteObject(rail);
+unsafe fn draw_action_button(draw:*const DrawItem)->isize {
+    if draw.is_null(){return 0;}
+    let info=unsafe{&*draw};
+    let id=info.ctl_id;
+    let dark=THEME.load(Ordering::Relaxed)==1;
+    let nav=(200..207).contains(&id);
+    let active=nav&&selected_nav(id);
+    let pressed=(info.item_state&ODS_SELECTED)!=0;
+    let prominent=[ID_PROFILE_SELECT,ID_PROFILE_NEW,ID_GIF_ADD,ID_EDITOR_SAVE].contains(&id);
+    let accent=if prominent{color(145,66,223)}else{color(42,217,199)};
+    let (fill,border,text_color)=if dark {
+        if active {(color(25,61,61),color(43,203,183),color(235,255,251))}
+        else if pressed {(color(42,60,69),accent,color(255,255,255))}
+        else if prominent {(color(51,33,69),color(126,67,169),color(249,235,255))}
+        else {(color(35,38,44),color(60,67,77),color(237,242,245))}
+    } else if active {(color(211,243,238),color(16,153,136),color(18,50,48))}
+        else {(color(246,248,252),color(187,197,206),color(35,42,51))};
+    let r=&info.rect;
+    unsafe {
+        rounded(info.hdc,r,fill,border,12);
+        if active {
+            let bar=Rect{left:r.left+5,top:r.top+7,right:r.left+9,bottom:r.bottom-7};
+            let brush=CreateSolidBrush(color(42,217,199));
+            FillRect(info.hdc,&bar,brush);
+            DeleteObject(brush);
+        }
+        let mut buffer=[0u16;260];
+        let len=GetWindowTextW(info.hwnd_item,buffer.as_mut_ptr(),buffer.len() as i32);
+        let caption=String::from_utf16_lossy(&buffer[..len.max(0) as usize]);
+        let mut area=Rect{left:r.left+if nav{18}else{6},top:r.top+1,right:r.right-6,bottom:r.bottom-1};
+        if nav {area.right=r.right-5;}
+        draw_label(info.hdc,&caption,&area,text_color,!nav);
     }
-    paint_card(dc,Rect{left:181,top:43,right:527,bottom:ch-11},card,border,18);
-    paint_card(dc,Rect{left:536,top:70,right:cw-15,bottom:(ch-16).max(390)},card,border,18);
-    paint_text(dc,17,10,"GxOled",23,700,COLOR_CYAN);
-    paint_text(dc,187,13,"OLED CONTROL CENTER",14,700,foreground);
-    let subtitle=match page {
-        0=>"GENERAL / PREFERENCES",1=>"CLOCK / STYLES",2=>"ANIMATION / PROFILES",
-        3=>"DISPLAY / PROTECTION",4=>"MEDIA / PLAYBACK",5=>"ABOUT / SUPPORT",
-        _=>"GIF STUDIO / LIBRARY",
-    };
-    paint_text(dc,549,52,subtitle,12,700,muted);
-    paint_text(dc,549,(ch-56).max(394),"128 x 64  |  STEELSERIES OLED",11,400,muted);
-    let preview_line=Rect{left:538,top:72,right:cw-17,bottom:75};
-    let highlight=unsafe{CreateSolidBrush(COLOR_PURPLE)};
-    unsafe{FillRect(dc,&preview_line,highlight);DeleteObject(highlight);}
-    let left_accent=Rect{left:182,top:44,right:527,bottom:47};
-    let accent=unsafe{CreateSolidBrush(COLOR_CYAN)};
-    unsafe{FillRect(dc,&left_accent,accent);DeleteObject(accent);}
+    1
 }
-// Lightweight illustrative thumbnails for the clock picker; the 128x64
-// panel on the right is the *real* live preview. These tiles never feed OLED.
-fn paint_clock_gallery(dc:Handle,scroll:i32,ch:i32,dark:bool){
-    let tile=if dark{rgb(19,24,31)}else{rgb(246,249,252)};
-    let edge=if dark{COLOR_BORDER}else{rgb(200,216,224)};
-    let ink=if dark{COLOR_CYAN}else{rgb(12,133,143)};
-    for i in 0..5 {
-        let col=i%2;let row=i/2;
-        let x=186+col*168;
-        let y=82+row*105-scroll;
-        if y<43 || y+94>ch-4 {continue;}
-        let r=Rect{left:x,top:y,right:x+157,bottom:y+95};
-        paint_card(dc,r,tile,edge,12);
-        match i {
-            0=>paint_text(dc,x+30,y+43,"12:45",27,400,ink),
-            1=>paint_text(dc,x+20,y+39,"09:42",34,700,COLOR_PURPLE),
-            2|3=>{
-                let pen=unsafe{CreatePen(0,2,ink)};
-                let brush=unsafe{CreateSolidBrush(tile)};
-                unsafe{
-                    let old_pen=SelectObject(dc,pen);let old_brush=SelectObject(dc,brush);
-                    if i==2 {Ellipse(dc,x+56,y+39,x+104,y+86);}
-                    else {RoundRect(dc,x+54,y+38,x+106,y+87,10,10);}
-                    MoveToEx(dc,x+80,y+63,ptr::null_mut());LineTo(dc,x+80,y+44);
-                    MoveToEx(dc,x+80,y+63,ptr::null_mut());LineTo(dc,x+98,y+71);
-                    SelectObject(dc,old_brush);SelectObject(dc,old_pen);
-                    DeleteObject(pen);DeleteObject(brush);
-                }
-            }
-            _=>{
-                paint_text(dc,x+31,y+38,"CASIO",11,700,ink);
-                paint_text(dc,x+32,y+51,"04:17",22,700,ink);
-            }
+fn page_label(page:usize,tr:bool)->&'static str {
+    match page {
+        0=>if tr{"GENEL BAKIŞ"}else{"GENERAL CONTROL"},
+        1=>if tr{"SAAT GALERİSİ"}else{"CLOCK GALLERY"},
+        2=>if tr{"ANİMASYON PROFİLLERİ"}else{"ANIMATION PROFILES"},
+        6=>"GIF STUDIO",
+        3=>if tr{"OLED EKRAN AYARLARI"}else{"OLED DISPLAY"},
+        4=>if tr{"MEDYA"}else{"MEDIA CONTROLS"},
+        _=>if tr{"HAKKINDA"}else{"ABOUT GXOLED"},
+    }
+}
+fn paint_panels(dc:Handle, s:&State,cw:i32,ch:i32){
+    let dark=s.theme==ConfigTheme::Dark;
+    let (bg,rail,panel,border,main_text,muted,teal)=if dark {
+        (color(19,20,23),color(15,17,21),color(26,28,33),color(57,63,74),
+            color(240,245,247),color(152,163,173),color(42,217,199))
+    }else{(color(241,245,249),color(233,239,243),color(255,255,255),color(193,205,214),
+            color(33,40,49),color(89,103,119),color(19,150,135))};
+    let full=Rect{left:0,top:0,right:cw,bottom:ch};
+    unsafe {
+        let brush=CreateSolidBrush(bg); FillRect(dc,&full,brush);DeleteObject(brush);
+        rounded(dc,&Rect{left:7,top:60,right:SETTINGS_LEFT-7,bottom:ch-9},rail,border,20);
+        rounded(dc,&Rect{left:SETTINGS_LEFT-7,top:60,right:SETTINGS_LEFT+SETTINGS_FORM+5,bottom:ch-9},panel,border,20);
+        rounded(dc,&Rect{left:SETTINGS_LEFT+SETTINGS_FORM+12,top:60,right:cw-11,bottom:ch-9},panel,border,20);
+        draw_label(dc,"GxOled",&Rect{left:18,top:8,right:150,bottom:39},teal,false);
+        draw_label(dc,"128 x 64   /   OLED CONTROL",&Rect{left:181,top:8,right:570,bottom:39},muted,false);
+        draw_label(dc,page_label(s.page,s.language==ConfigLanguage::Turkish),
+            &Rect{left:SETTINGS_LEFT+14,top:67,right:SETTINGS_LEFT+SETTINGS_FORM-12,bottom:94},main_text,false);
+        let rule=Rect{left:SETTINGS_LEFT+14,top:99,right:SETTINGS_LEFT+70,bottom:102};
+        let brush=CreateSolidBrush(teal);FillRect(dc,&rule,brush);DeleteObject(brush);
+        let p_x=SETTINGS_LEFT+SETTINGS_FORM+25;
+        draw_label(dc,if s.page==5{"DONATIONS   /   USDT TRON"}else{"LIVE OLED   /   MONOCHROME"},
+            &Rect{left:p_x,top:75,right:cw-16,bottom:101},muted,false);
+        if s.page!=5 {
+            draw_label(dc,"SteelSeries  •  128 x 64",
+                &Rect{left:p_x,top:346,right:cw-18,bottom:374},muted,false);
+            draw_label(dc,"GxOled v0.4.0  •  LOCAL SETTINGS",
+                &Rect{left:p_x,top:395,right:cw-20,bottom:422},muted,false);
+            rounded(dc,&Rect{left:p_x-4,top:458,right:cw-25,bottom:555},
+                if dark{color(30,35,43)}else{color(240,249,248)},border,16);
+            let info=match s.page {
+                0=>"APP MODE  /  QUICK ACCESS",
+                1=>"CLOCK  /  LIVE STYLE PREVIEW",
+                2=>"ANIMATIONS  /  128 x 64",
+                6=>"GIF STUDIO  /  PLAYBACK",
+                3=>"DISPLAY  /  BURN-IN CONTROL",
+                _=>"MEDIA  /  SYSTEM PLAYBACK",
+            };
+            draw_label(dc,info,&Rect{left:p_x+10,top:470,right:cw-30,bottom:498},teal,false);
+            let hint=match s.page {
+                0=>"Tray, Window or Hybrid opening mode",
+                1=>"Select a style to update this preview",
+                2=>"Native Go-rendered animation profiles",
+                6=>"GIF files, playback and OLED preview",
+                3=>"Brightness and OLED pixel protection",
+                _=>"Track details in a separate OLED view",
+            };
+            draw_label(dc,hint,&Rect{left:p_x+10,top:507,right:cw-30,bottom:537},muted,false);
         }
     }
 }
-
-fn draw_owner_button(info:&DrawItem){
-    let id=info.ctl_id;
-    let nav=(200..207).contains(&id);
-    let quit=id==371;
-    let is_active=nav && ACTIVE_PAGE.load(Ordering::Relaxed)==(id-200) as u8;
-    let dark=THEME.load(Ordering::Relaxed)==1;
-    let pressed=info.item_state&ODS_SELECTED!=0;
-    let card=if dark{COLOR_CARD_BG}else{rgb(245,247,250)};
-    let accent=if matches!(id, ID_PROFILE_SELECT|ID_EDITOR_SAVE|ID_GIF_ADD){COLOR_PURPLE}else{COLOR_CYAN};
-    let highlighted=is_active || pressed;
-    let fill=if highlighted{if dark{COLOR_CYAN_SURFACE}else{rgb(215,249,246)}}else if quit{if dark{rgb(48,35,40)}else{rgb(252,233,235)}}else{card};
-    let border=if highlighted{if dark{accent}else{rgb(13,126,137)}}else{if dark{COLOR_BORDER}else{rgb(198,209,221)}};
-    let text_color=if dark{COLOR_DARK_TEXT}else{rgb(26,39,48)};
-    let mut area=Rect{left:info.rect.left+1,top:info.rect.top+1,
-        right:info.rect.right-1,bottom:info.rect.bottom-1};
-    if area.right<=area.left || area.bottom<=area.top{return;}
-    paint_card(info.dc,Rect{left:area.left,top:area.top,right:area.right,bottom:area.bottom},fill,border,10);
-    if is_active{
-        let brush=unsafe{CreateSolidBrush(COLOR_CYAN)};
-        let bar=Rect{left:area.left+1,top:area.top+8,right:area.left+4,bottom:area.bottom-8};
-        unsafe{FillRect(info.dc,&bar,brush);DeleteObject(brush);}
-    }
-    let h=info.hwnd_item;
-    let len=unsafe{GetWindowTextLengthW(h)}.clamp(0,2048) as usize;
-    let mut buffer=vec![0u16;len+1];
-    let count=unsafe{GetWindowTextW(h,buffer.as_mut_ptr(),(len+1) as i32)};
-    if count<=0{return;}
-    unsafe{
-        SetBkMode(info.dc,TRANSPARENT);
-        SetTextColor(info.dc,if is_active{if dark{COLOR_CYAN}else{rgb(0,112,121)}}else if quit{if dark{rgb(243,166,166)}else{rgb(134,39,53)}}else{text_color});
-        let font=SendMessageW(h,WM_GETFONT,0,0) as Handle;
-        let old=if font.is_null(){ptr::null_mut()}else{SelectObject(info.dc,font)};
-        area.left+=if nav{9}else{4};area.right-=4;
-        DrawTextW(info.dc,buffer.as_ptr(),count,&mut area,
-            DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
-        if !font.is_null(){SelectObject(info.dc,old);}
-    }
-}
-
 unsafe extern "system" fn wnd_proc(hwnd:Handle, message:u32, w:usize, l:isize)->isize {
     match message {
+        WM_DRAWITEM => {
+            // Owner-drawn pushbuttons keep native keyboard/click behavior.
+            return unsafe{draw_action_button(l as *const DrawItem)};
+        }
+        WM_GETMINMAXINFO => {
+            // JSON editor controls require enough width for five readable actions.
+            if let Some(editor)=EDITOR.get() {
+                if editor.try_lock().ok().is_some_and(|ed|ed.hwnd==hwnd as usize) && l!=0 {
+                    let bounds=unsafe{&mut *(l as *mut MinMaxInfo)};
+                    bounds.min_track.x=860;
+                    bounds.min_track.y=540;
+                    return 0;
+                }
+            }
+        }
         WM_ERASEBKGND if THEME.load(Ordering::Relaxed)==1 => {
             let mut rect=Rect::default();
             unsafe { GetClientRect(hwnd,&mut rect); }
@@ -910,32 +904,18 @@ unsafe extern "system" fn wnd_proc(hwnd:Handle, message:u32, w:usize, l:isize)->
             unsafe {FillRect(w as Handle,&rect,brush as Handle);}
             return 1;
         }
-        WM_DRAWITEM if l!=0 => {
-            let info=unsafe{&*(l as *const DrawItem)};
-            if info.ctl_type==4 {draw_owner_button(info);return 1;}
-        }
-        WM_GETMINMAXINFO if l!=0 => {
-            // Keep the JSON editor's five actions readable. Main settings is
-            // already fixed size and is intentionally left unchanged.
-            let editor_window=EDITOR.get().and_then(|lock|lock.lock().ok()
-                .map(|editor|editor.hwnd==hwnd as usize)).unwrap_or(false);
-            if editor_window {
-                let sizes=unsafe{&mut *(l as *mut MinMaxInfo)};
-                sizes.min_track_size.x=850;
-                sizes.min_track_size.y=470;
-                return 0;
-            }
-        }
         WM_CTLCOLOREDIT | WM_CTLCOLORLISTBOX if THEME.load(Ordering::Relaxed)==1 => {
             unsafe{SetTextColor(w as Handle,COLOR_DARK_TEXT);SetBkColor(w as Handle,COLOR_EDITOR_BG);}
             return *EDIT_BRUSH.get_or_init(||unsafe{CreateSolidBrush(COLOR_EDITOR_BG)} as usize) as isize;
         }
         WM_CTLCOLORSTATIC | WM_CTLCOLORBTN if THEME.load(Ordering::Relaxed)==1 => {
-            let id=unsafe{GetDlgCtrlID(l as Handle)};
-            let heading=[500,503,510,511,520,530,531,540,710,711,712,713,714,715,718].contains(&id);
-            let color=if heading{COLOR_CYAN}else if [501,521,522,523,716,719,ID_ABOUT_CREDITS as i32,ID_ABOUT_COFFEE as i32,ID_QR_HINT as i32].contains(&id){COLOR_MUTED}else{COLOR_DARK_TEXT};
-            unsafe {SetTextColor(w as Handle,color);SetBkColor(w as Handle,COLOR_CARD_BG);}
-            return *CARD_BRUSH.get_or_init(||unsafe{CreateSolidBrush(COLOR_CARD_BG)} as usize) as isize;
+            let panel=color(26,28,33);
+            let ctrl_id=unsafe{GetDlgCtrlID(l as Handle)} as u32;
+            let heading=message==WM_CTLCOLORSTATIC &&
+                [500,503,510,511,520,718,530,531,713,540,710,712,714].contains(&ctrl_id);
+            let fg=if heading{color(49,224,205)}else{COLOR_DARK_TEXT};
+            unsafe {SetTextColor(w as Handle,fg);SetBkColor(w as Handle,panel);}
+            return *PANEL_BRUSH.get_or_init(||unsafe{CreateSolidBrush(panel)} as usize) as isize;
         }
         WM_SIZE | WM_DPICHANGED => {
             if STATE.get().is_some() {layout_window();}
@@ -1051,31 +1031,23 @@ unsafe extern "system" fn wnd_proc(hwnd:Handle, message:u32, w:usize, l:isize)->
                     if !dc.is_null() {
                         let (cw,ch,left,form,sc,_preview_right)=main_layout(&guard);
                         let scale=|n:i32|n*sc/100;
-                        paint_interface_chrome(dc,cw,ch,guard.page,guard.theme==ConfigTheme::Dark);
-                        if guard.page==1 {
-                            paint_clock_gallery(dc,guard.scroll[1],ch,guard.theme==ConfigTheme::Dark);
-                        }
+                        paint_panels(dc,&guard,cw,ch);
                         unsafe {SetStretchBltMode(dc,3);} // COLORONCOLOR keeps OLED / QR hard edges.
                         if guard.page!=5 {
                             let x=left+form+scale(14);
                             let dst_w=(cw-x-scale(14)).max(1).min(scale(360));
                             let dst_h=dst_w/2;
-                            let y=scale(105);
+                            let y=scale(145);
                             if y<ch && y+dst_h>scale(38) {
-                                let border=Rect{left:x-scale(4),top:y-scale(4),
-                                    right:x+dst_w+scale(4),bottom:y+dst_h+scale(4)};
-                                let bg=unsafe{CreateSolidBrush(0x00141414)};
-                                unsafe{FillRect(dc,&border,bg);DeleteObject(bg);}
                                 let info=BitmapInfo{header:BitmapInfoHeader{
                                     size:40,width:128,height:-64,planes:1,bit_count:32,compression:0,
                                     image_size:128*64*4,x_pixels_per_meter:0,y_pixels_per_meter:0,
                                     used:0,important:0},colors:[0]};
+                                let border=Rect{left:x-3,top:y-3,right:x+dst_w+3,bottom:y+dst_h+3};
+                                unsafe {rounded(dc,&border,color(14,16,19),color(31,123,114),12);}
+                                // The OLED bitmap is strictly monochrome, irrespective of UI accent colours.
                                 unsafe{StretchDIBits(dc,x,y,dst_w,dst_h,0,0,128,64,
                                     guard.framebuffer.as_ptr().cast(),&info,0,SRCCOPY);}
-                                let label=wide("OLED PREVIEW · 128 × 64");
-                                unsafe{SetBkMode(dc,1);
-                                    SetTextColor(dc,if guard.theme==ConfigTheme::Dark{0x00dddddd}else{0x00333333});
-                                    TextOutW(dc,x,y-scale(23),label.as_ptr(),(label.len()-1) as i32);}
                             }
                         } else if let Some((w,h,bytes))=&guard.qr {
                             let (x,base_y,show_w,show_h)=qr_geometry(&guard,cw,left,form,sc);
@@ -1107,16 +1079,20 @@ fn select_tab(tab: usize) {
             s.page = tab;
         }
     }
-    ACTIVE_PAGE.store(tab as u8,Ordering::Relaxed);
     // layout_window shows/hides controls. Never ShowWindow while holding STATE.
     layout_window();
+    if let Some(s)=STATE.get() {
+        if let Ok(guard)=s.lock(){
+            unsafe { for (id,h) in &guard.buttons {
+                if (200..207).contains(id) {InvalidateRect(*h as Handle,ptr::null(),1);}
+            }}
+        }
+    }
 }
 fn control(parent:Handle, class:&str, text:&str, id:u32, x:i32,y:i32,w:i32,h:i32,style:u32)->Handle {
     let klass=wide(class);let caption=wide(text);
-    // Only ordinary push buttons are owner drawn. Native radio/check boxes
-    // must retain BM_SETCHECK behavior for configuration synchronization.
-    let appearance=if class=="BUTTON" && style & 0x000f==0 {style|BS_OWNERDRAW}else{style};
-    unsafe { CreateWindowExW(if class=="EDIT" || class=="LISTBOX" {0x00000200}else{0},klass.as_ptr(),caption.as_ptr(),appearance | WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+    let effective_style=if class=="BUTTON" && (style&0x000f)==0 {style|BS_OWNERDRAW}else{style};
+    unsafe { CreateWindowExW(if class=="EDIT" || class=="LISTBOX" {0x00000200}else{0},klass.as_ptr(),caption.as_ptr(),effective_style | WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
         x,y,w,h,parent,id as usize as Handle,GetModuleHandleW(ptr::null()),ptr::null()) }
 }
 
@@ -1142,13 +1118,13 @@ pub fn create(tx:Sender<MenuEvent>) -> Result<(),String> {
         ptr::null_mut(),ptr::null_mut(),inst,ptr::null())};
     if hwnd.is_null(){return Err("CreateWindowExW failed".into());}
     let font_name=wide("Segoe UI");
-    let font=unsafe{CreateFontW(-18,0,0,0,400,0,0,0,1,0,0,5,0,font_name.as_ptr())};
-    let section_font=unsafe{CreateFontW(-18,0,0,0,700,0,0,0,1,0,0,5,0,font_name.as_ptr())};
+    let font=unsafe{CreateFontW(-18,0,0,0,500,0,0,0,1,0,0,5,0,font_name.as_ptr())};
+    if !font.is_null(){let _=UI_FONT.set(font as usize);}
     let mut tabs=vec![Vec::new();7];
     let mut buttons=Vec::new();
     let mut placements=Vec::new();
     for (idx,label) in ["General","Clock","Animations","Display","Media","About","GIF Studio"].iter().enumerate(){
-        let ctrl=control(hwnd,"BUTTON",label,200+idx as u32,15,55+idx as i32*52,190,40,0);
+        let ctrl=control(hwnd,"BUTTON",label,200+idx as u32,15,55+idx as i32*52,155,40,0);
         if !font.is_null(){unsafe{SendMessageW(ctrl,WM_SETFONT,font as usize,1);}}
         buttons.push((200+idx as u32,ctrl as usize));
     }
@@ -1158,10 +1134,7 @@ pub fn create(tx:Sender<MenuEvent>) -> Result<(),String> {
     buttons.push((371,quit as usize));
     let mut make=|tab:usize,kind:&str,label:&str,id:u32,x:i32,y:i32,w:i32,h:i32,style:u32| {
         let ctrl=control(hwnd,kind,label,id,x,y,w,h,style);
-        let heading=[500,503,510,511,520,530,531,540,710,711,712,713,714,715,718]
-            .contains(&id) && kind=="STATIC";
-        let selected_font=if heading && !section_font.is_null(){section_font}else{font};
-        if !selected_font.is_null(){unsafe{SendMessageW(ctrl,WM_SETFONT,selected_font as usize,1);}}
+        if !font.is_null(){unsafe{SendMessageW(ctrl,WM_SETFONT,font as usize,1);}}
         tabs[tab].push(ctrl as usize);
         placements.push(ControlPlacement{hwnd:ctrl as usize,id,page:tab,x,y,w,h,class:kind.to_owned()});
         if id>0{buttons.push((id,ctrl as usize));}
@@ -1185,14 +1158,12 @@ pub fn create(tx:Sender<MenuEvent>) -> Result<(),String> {
     make(0,"BUTTON","SteelSeries stock UI",ID_QUIT_BASE+1,244,590,235,29,4|WS_TABSTOP);
     // Clock
     make(1,"STATIC","CLOCK STYLE",510,244,75,290,26,0);
-    // Two-column clock gallery, preserving the native radio ID/check state.
     for (i,name) in ["Digital Standard","Digital Big","Analog Round","Analog Square","Casio Digital Dial"].iter().enumerate(){
-        let col=(i%2) as i32;let row=(i/2) as i32;
-        make(1,"BUTTON",name,310+i as u32,244+col*168,114+row*105,154,29,4|WS_TABSTOP);
+        make(1,"BUTTON",name,310+i as u32,244,114+i as i32*38,250,31,4|WS_TABSTOP);
     }
-    make(1,"STATIC","Time display",511,244,452,280,27,0);
+    make(1,"STATIC","Time display",511,244,325,280,27,0);
     for (i,name) in ["Off","24-hour","12-hour"].iter().enumerate(){
-        make(1,"BUTTON",name,320+i as u32,244,493+i as i32*35,250,29,4|WS_TABSTOP);
+        make(1,"BUTTON",name,320+i as u32,244,365+i as i32*38,250,31,4|WS_TABSTOP);
     }
     // Animation profiles are file-backed. There is no fixed limit.
     make(2,"STATIC","128×64 animation profiles",520,244,75,320,26,0);
@@ -1365,7 +1336,10 @@ pub fn preview(bitmap:&gxoled_lib::Bitmap) {
         for (i,pixel) in bitmap.data.iter().enumerate(){ s.framebuffer[i]=if pixel{0x00ffffff}else{0}; }
         s.hwnd
     }));
-    if let Some(hwnd) = hwnd { unsafe{InvalidateRect(hwnd as Handle,ptr::null(),0);} }
+    if let Some(hwnd) = hwnd {
+        let region=Rect{left:SETTINGS_LEFT+SETTINGS_FORM+11,top:134,right:SETTINGS_WIDTH-12,bottom:335};
+        unsafe{InvalidateRect(hwnd as Handle,&region,0);}
+    }
 }
 
 fn open_github() {
@@ -1513,7 +1487,7 @@ fn open_profile_editor_with(entry:ProfileEntry,target:std::path::PathBuf,content
     let sw=unsafe{GetSystemMetrics(0)}.max(640);
     let sh=unsafe{GetSystemMetrics(1)}.max(480);
     let hwnd=unsafe{CreateWindowExW(0,cls.as_ptr(),wide("GxOled — Advanced Animation Editor").as_ptr(),
-        WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,60,60,900.min(sw-30).max(850),710.min(sh-40).max(470),
+        WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,60,60,930.min(sw-30),680.min(sh-40),
         ptr::null_mut(),ptr::null_mut(),inst,ptr::null())};
     if hwnd.is_null(){profile_error("GxOled","Unable to create profile editor");return;}
     let edit=control(hwnd,"EDIT","",400,16,16,728,520,
@@ -1525,7 +1499,7 @@ fn open_profile_editor_with(entry:ProfileEntry,target:std::path::PathBuf,content
         if prior!=0 {PREV_EDITOR_PROC.store(prior,Ordering::Release);}
     }
     let font_name=wide("Consolas");
-    let font=unsafe{CreateFontW(-15,0,0,0,400,0,0,0,1,0,0,5,0,font_name.as_ptr())};
+    let font=unsafe{CreateFontW(-17,0,0,0,400,0,0,0,1,0,0,5,0,font_name.as_ptr())};
     if !font.is_null(){unsafe{SendMessageW(edit,WM_SETFONT,font as usize,1);}}
     let mut controls=Vec::new();
     for (id,caption) in [
