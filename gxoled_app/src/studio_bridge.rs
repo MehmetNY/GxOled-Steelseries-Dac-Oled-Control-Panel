@@ -71,7 +71,12 @@ fn handle(mut stream:TcpStream, token:&str, tx:&Sender<MenuEvent>){
     let dir=studio_dir();
     if std::fs::create_dir_all(&dir).is_err(){response(&mut stream,"500 Internal Server Error","Cannot create Studio directory");return;}
     let tmp=dir.join("last-export.tmp");let dest=dir.join("last-export.gif");
-    if std::fs::write(&tmp,body).is_err() || std::fs::rename(&tmp,&dest).is_err() {
+    if std::fs::write(&tmp,body).is_err() {
+        response(&mut stream,"500 Internal Server Error","Cannot save Studio GIF");return;
+    }
+    // Windows cannot rename over an existing file: replace the prior export.
+    if dest.exists() {let _=std::fs::remove_file(&dest);}
+    if std::fs::rename(&tmp,&dest).is_err() {
         response(&mut stream,"500 Internal Server Error","Cannot save Studio GIF");return;
     }
     // Send in order: the classic engine has no second HID connection and is
