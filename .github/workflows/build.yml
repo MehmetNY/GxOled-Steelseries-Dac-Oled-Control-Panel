@@ -36,17 +36,6 @@ jobs:
           path: |
             ~/.cargo
             target
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go_animations/go.mod
-      - name: Build embedded renderer
-        shell: pwsh
-        run: |
-          Push-Location go_animations
-          go build -o gxoled-animations.exe ./cmd/renderer
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Pop-Location
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Check desktop app
@@ -75,12 +64,6 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: x86_64-pc-windows-gnu
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go_animations/go.mod
-      - name: Cross-build embedded renderer
-        run: cd go_animations && GOOS=windows GOARCH=amd64 go build -o gxoled-animations.exe ./cmd/renderer
       - name: Build
         run: cargo build --locked --release --features sdl3-static --target x86_64-pc-windows-gnu
       - name: Upload artifact
