@@ -1,0 +1,88 @@
+name: Correct GxOled Advanced v0.5.0 - exact reference source
+
+on:
+  push:
+    branches:
+      - automation/republish-exact-v0.5.0
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: correct-v0.5.0-immutable-source
+  cancel-in-progress: false
+
+jobs:
+  verify-build-and-replace:
+    name: Verify exact UI and republish v0.5.0
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact reference ZIP-based commit (not the automation branch)
+        uses: actions/checkout@v4
+        with:
+          ref: 8f95009fd30ff5b405a9ccf06e27da8bf88499fa
+          persist-credentials: false
+      - name: Verify exact source revision
+        shell: pwsh
+        run: |
+          $sha = (git rev-parse HEAD).Trim()
+          if ($sha -ne '8f95009fd30ff5b405a9ccf06e27da8bf88499fa') { throw "Unexpected source revision: $sha" }
+          if (Test-Path 'studio') { throw 'Unexpected Studio source in stable release' }
+          if (-not (Test-Path 'go_animations/gxoled-animations.exe')) { throw 'Original embedded Go renderer missing' }
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cargo check
+        shell: pwsh
+        run: |
+          cargo check --locked -p gxoled_app --features sdl3-static
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Unit tests
+        shell: pwsh
+        run: |
+          cargo test --locked -p gxoled_app -p gxoled_draw -p gxoled_lib --features gxoled_app/sdl3-static
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build release executable
+        shell: pwsh
+        run: |
+          cargo build --locked --release -p gxoled_app --features sdl3-static
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Create Windows ZIP and exact source snapshot
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item target/release/gxoled.exe release/gxoled.exe
+          Copy-Item go_animations/gxoled-animations.exe release/gxoled-animations.exe
+          Compress-Archive -Path release/gxoled.exe,release/gxoled-animations.exe -DestinationPath release/GxOled-Advanced-v0.5.0-Windows-x64.zip -Force
+          git archive --format=zip --output=release/GxOled-Advanced-v0.5.0-Exact-Source.zip HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $names = @('gxoled.exe','gxoled-animations.exe','GxOled-Advanced-v0.5.0-Windows-x64.zip','GxOled-Advanced-v0.5.0-Exact-Source.zip')
+          $lines = foreach ($name in $names) {
+            $sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path release $name)).Hash.ToLower()
+            "$sha256  $name"
+          }
+          $lines | Set-Content release/SHA256SUMS.txt -Encoding UTF8
+      - name: Attach verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GxOled-Advanced-v0.5.0-exact-reference
+          path: |
+            release/gxoled.exe
+            release/GxOled-Advanced-v0.5.0-Windows-x64.zip
+            release/GxOled-Advanced-v0.5.0-Exact-Source.zip
+            release/SHA256SUMS.txt
+      - name: Replace existing v0.5.0 release from exact-reference commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          $commit = (git rev-parse HEAD).Trim()
+          gh release view v0.5.0 --repo $env:GH_REPO | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Existing v0.5.0 release does not exist; refusing to publish to wrong release' }
+          gh release upload v0.5.0 release/gxoled.exe release/GxOled-Advanced-v0.5.0-Windows-x64.zip release/GxOled-Advanced-v0.5.0-Exact-Source.zip release/SHA256SUMS.txt --clobber --repo $env:GH_REPO
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh api --method PATCH "repos/$env:GH_REPO/git/refs/tags/v0.5.0" -f "sha=$commit" -F force=true | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit v0.5.0 --repo $env:GH_REPO --title 'GxOled Advanced v0.5.0' --target "$commit" --notes 'Exactly the user-provided October 25, 2026 blue UI reference source. All 104 original files are preserved unchanged except the single necessary Rust E0382 Rect-ownership compiler fix (settings_window.rs). No UI redesign, new controls, GIF Studio, changed settings or modified build script in this stable baseline. Includes original Go helper executable. Windows checks, tests and release build passed.' --latest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
