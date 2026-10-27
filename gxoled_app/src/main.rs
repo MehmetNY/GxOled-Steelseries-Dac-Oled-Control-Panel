@@ -4,6 +4,8 @@ mod os;
 #[cfg(target_os = "windows")]
 mod settings_window;
 #[cfg(target_os = "windows")]
+mod studio_bridge;
+#[cfg(target_os = "windows")]
 mod go_bridge;
 
 use chrono::{DateTime, Local, TimeDelta, Timelike};
@@ -876,6 +878,10 @@ enum MenuEvent {
     #[cfg(target_os = "windows")]
     OpenGifPickerFromWindow,
     #[cfg(target_os = "windows")]
+    OpenGifStudio,
+    #[cfg(target_os = "windows")]
+    StartImportedGif,
+    #[cfg(target_os = "windows")]
     ToggleGifFromWindow,
     SetShiftMode(ConfigShiftMode),
     SetStatusNotifyMode(StatusNotifyMode),
@@ -1002,6 +1008,8 @@ fn main() {
     let menu = unsafe { sdl::SDL_CreateTrayMenu(tray) };
     assert!(!menu.is_null());
     let (menu_tx, menu_rx) = mpsc::channel::<MenuEvent>();
+    #[cfg(target_os = "windows")]
+    studio_bridge::start(menu_tx.clone());
 
     let version_label = format!("GxOled - v{}\0", env!("CARGO_PKG_VERSION"));
     unsafe {
@@ -1139,6 +1147,10 @@ fn main() {
     let tm_add_gif = unsafe { sdl::SDL_InsertTrayEntryAt(tm_animation_submenu, -1, c"Add GIF".as_ptr(), sdl::SDL_TRAYENTRY_BUTTON) };
     let gif_menu_tx = menu_tx.clone();
     menu_callback(tm_add_gif, move || start_gif_file_picker(&gif_menu_tx));
+    #[cfg(target_os = "windows")]
+    let tm_studio = unsafe { sdl::SDL_InsertTrayEntryAt(tm_animation_submenu, -1, c"Open GIF Studio Editor...".as_ptr(), sdl::SDL_TRAYENTRY_BUTTON) };
+    #[cfg(target_os = "windows")]
+    bind_menu_event(tm_studio, &menu_tx, MenuEvent::OpenGifStudio);
     let tm_animation_check = menu_check(
         tm_animation_submenu,
         c"Start / Stop animation",
@@ -1235,6 +1247,7 @@ fn main() {
         set(tm_startup_check,"Start GxOled with Windows","Windows ile GxOled'i başlat");
         set(tm_animation_menu,"Animation","Animasyon");
         set(tm_add_gif,"Add GIF","GIF ekle");
+        set(tm_studio,"Open GIF Studio Editor...","GIF Studio editörünü aç...");
         set(tm_animation_check,"Start / Stop animation","Animasyonu başlat / durdur");
         set(tm_go_anim_radio.title,"SteelClock 128x64","SteelClock 128x64");
         set(tm_open_settings,"Open Settings...","Ayarları aç...");
@@ -1329,6 +1342,8 @@ fn main() {
                 MenuEvent::Quit => return,
                 #[cfg(target_os = "windows")]
                 MenuEvent::OpenSettings => settings_window::open(),
+                #[cfg(target_os = "windows")]
+                MenuEvent::OpenGifStudio => studio_bridge::launch_studio(),
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetUiMode(mode) => {
                     config.ui_mode=mode;
@@ -1477,6 +1492,8 @@ fn main() {
                 #[cfg(target_os = "windows")]
                 MenuEvent::OpenSettings => settings_window::open(),
                 #[cfg(target_os = "windows")]
+                MenuEvent::OpenGifStudio => studio_bridge::launch_studio(),
+                #[cfg(target_os = "windows")]
                 MenuEvent::SetUiMode(mode) => {
                     config.ui_mode = mode;
                     tm_ui_radio.update_checked(mode);
@@ -1499,6 +1516,12 @@ fn main() {
                 }
                 #[cfg(target_os = "windows")]
                 MenuEvent::OpenGifPickerFromWindow => start_gif_file_picker(&menu_tx),
+                #[cfg(target_os = "windows")]
+                MenuEvent::StartImportedGif => {
+                    // The local Studio export first selects the file and then starts it.
+                    unsafe {sdl::SDL_SetTrayEntryChecked(tm_animation_check,true);}
+                    let _=menu_tx.send(MenuEvent::ToggleAnimation);
+                },
                 #[cfg(target_os = "windows")]
                 MenuEvent::ToggleGifFromWindow => {
                     let enabled=unsafe{sdl::SDL_GetTrayEntryChecked(tm_animation_check)};
