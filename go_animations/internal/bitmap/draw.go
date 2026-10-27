@@ -1,0 +1,744 @@
+package bitmap
+
+import (
+	"image"
+	"image/color"
+	"math"
+
+	"github.com/pozitronik/steelclock-go/internal/bitmap/glyphs"
+	"github.com/pozitronik/steelclock-go/internal/config"
+)
+
+// DrawHorizontalBar draws a horizontal progress bar
+func DrawHorizontalBar(img *image.Gray, x, y, w, h int, percentage float64, fillColor uint8, drawBorder bool) {
+	c := color.Gray{Y: fillColor}
+
+	// Draw border if requested
+	if drawBorder {
+		for i := x; i < x+w; i++ {
+			img.Set(i, y, c)
+			img.Set(i, y+h-1, c)
+		}
+		for i := y; i < y+h; i++ {
+			img.Set(x, i, c)
+			img.Set(x+w-1, i, c)
+		}
+
+		// Fill inside border
+		fillW := int(float64(w-2) * (percentage / 100.0))
+		if fillW > 0 {
+			for py := y + 1; py < y+h-1; py++ {
+				for px := x + 1; px < x+1+fillW; px++ {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	} else {
+		// Fill without border
+		fillW := int(float64(w) * (percentage / 100.0))
+		if fillW > 0 {
+			for py := y; py < y+h; py++ {
+				for px := x; px < x+fillW; px++ {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+// DrawVerticalBar draws a vertical progress bar (fills from bottom)
+func DrawVerticalBar(img *image.Gray, x, y, w, h int, percentage float64, fillColor uint8, drawBorder bool) {
+	c := color.Gray{Y: fillColor}
+
+	fillH := int(float64(h) * (percentage / 100.0))
+	fillY := y + h - fillH
+
+	if drawBorder {
+		// Draw border
+		for i := x; i < x+w; i++ {
+			img.Set(i, y, c)
+			img.Set(i, y+h-1, c)
+		}
+		for i := y; i < y+h; i++ {
+			img.Set(x, i, c)
+			img.Set(x+w-1, i, c)
+		}
+
+		// Fill inside border (bottom to top)
+		if fillH > 2 {
+			startY := fillY
+			if startY < y+1 {
+				startY = y + 1
+			}
+			for py := startY; py < y+h-1; py++ {
+				for px := x + 1; px < x+w-1; px++ {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	} else {
+		// Fill without border (bottom to top)
+		if fillH > 0 {
+			for py := fillY; py < y+h; py++ {
+				for px := x; px < x+w; px++ {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+// DrawGraph draws a history graph with optional filled area
+// fillColor: -1 = no fill (line only), 0-255 = fill color
+// lineColor: 0-255 = line color (always drawn)
+func DrawGraph(img *image.Gray, x, y, w, h int, history []float64, maxHistory int, fillColor, lineColor int) {
+	if len(history) < 2 {
+		return
+	}
+
+	// Clamp line color to valid range
+	if lineColor < 0 {
+		lineColor = 255
+	} else if lineColor > 255 {
+		lineColor = 255
+	}
+	lineC := color.Gray{Y: uint8(lineColor)}
+
+	// Calculate points
+	points := make([][2]int, 0, len(history))
+	offset := maxHistory - len(history)
+
+	for i, sample := range history {
+		px := x + int(float64(offset+i)/float64(maxHistory-1)*float64(w))
+		py := y + h - int((sample/100.0)*float64(h))
+		points = append(points, [2]int{px, py})
+	}
+
+	// Fill area under a line first (if fillColor >= 0), so line is drawn on top
+	if fillColor >= 0 && fillColor <= 255 {
+		fillC := color.Gray{Y: uint8(fillColor)}
+		for i := 0; i < len(points)-1; i++ {
+			x1, y1 := points[i][0], points[i][1]
+			x2, y2 := points[i+1][0], points[i+1][1]
+
+			// Fill vertical strips between consecutive points
+			for px := x1; px <= x2; px++ {
+				// Interpolate y coordinate
+				t := float64(px-x1) / float64(x2-x1+1)
+				py := int(float64(y1) + t*float64(y2-y1))
+
+				// Fill from py to bottom
+				for fy := py; fy < y+h; fy++ {
+					img.Set(px, fy, fillC)
+				}
+			}
+		}
+	}
+
+	// Draw line on top
+	for i := 0; i < len(points)-1; i++ {
+		DrawLine(img, points[i][0], points[i][1], points[i+1][0], points[i+1][1], lineC)
+	}
+}
+
+// DrawDualGauge draws a nested/concentric double gauge with two needles
+// Outer gauge (larger radius) for primary value, inner gauge (smaller radius) for secondary value
+//
+//nolint:gocyclo // Complex geometric calculations for dual gauge rendering
+func DrawDualGauge(img *image.Gray, pos config.PositionConfig, outerPercentage, innerPercentage float64, outerGaugeColor, outerNeedleColor, innerGaugeColor, innerNeedleColor uint8) {
+	centerX := pos.W / 2
+	centerY := pos.H - 3 // Near bottom
+
+	// Calculate radii - outer is larger, inner is ~60% of outer
+	outerRadius := pos.H - 6
+	if pos.W/2 < outerRadius {
+		outerRadius = pos.W/2 - 3
+	}
+
+	innerRadius := int(float64(outerRadius) * 0.6)
+
+	if outerRadius <= 0 || innerRadius <= 0 {
+		return
+	}
+
+	outerGColor := color.Gray{Y: outerGaugeColor}
+	outerNColor := color.Gray{Y: outerNeedleColor}
+	innerGColor := color.Gray{Y: innerGaugeColor}
+	innerNColor := color.Gray{Y: innerNeedleColor}
+
+	// Draw outer gauge arc (semicircle from 180° to 0°)
+	for angle := 180.0; angle >= 0; angle -= 2.0 {
+		rad := angle * math.Pi / 180.0
+		x := centerX + int(float64(outerRadius)*math.Cos(rad))
+		y := centerY - int(float64(outerRadius)*math.Sin(rad))
+
+		if x >= 0 && x < pos.W && y >= 0 && y < pos.H {
+			img.Set(x, y, outerGColor)
+		}
+	}
+
+	// Draw inner gauge arc (semicircle from 180° to 0°)
+	for angle := 180.0; angle >= 0; angle -= 2.0 {
+		rad := angle * math.Pi / 180.0
+		x := centerX + int(float64(innerRadius)*math.Cos(rad))
+		y := centerY - int(float64(innerRadius)*math.Sin(rad))
+
+		if x >= 0 && x < pos.W && y >= 0 && y < pos.H {
+			img.Set(x, y, innerGColor)
+		}
+	}
+
+	// Draw outer gauge tick marks
+	for tick := 0; tick <= 10; tick++ {
+		angle := 180.0 - float64(tick)*18.0 // 0-180 degrees in 10 steps
+		rad := angle * math.Pi / 180.0
+
+		// Outer point
+		x1 := centerX + int(float64(outerRadius)*math.Cos(rad))
+		y1 := centerY - int(float64(outerRadius)*math.Sin(rad))
+
+		// Inner point
+		tickLen := 3
+		if tick%5 == 0 {
+			tickLen = 5 // Longer ticks at 0%, 50%, 100%
+		}
+		x2 := centerX + int(float64(outerRadius-tickLen)*math.Cos(rad))
+		y2 := centerY - int(float64(outerRadius-tickLen)*math.Sin(rad))
+
+		DrawLine(img, x1, y1, x2, y2, outerGColor)
+	}
+
+	// Draw inner gauge tick marks (smaller, fewer)
+	for tick := 0; tick <= 10; tick += 2 { // Every other tick
+		angle := 180.0 - float64(tick)*18.0
+		rad := angle * math.Pi / 180.0
+
+		// Outer point
+		x1 := centerX + int(float64(innerRadius)*math.Cos(rad))
+		y1 := centerY - int(float64(innerRadius)*math.Sin(rad))
+
+		// Inner point
+		tickLen := 2
+		x2 := centerX + int(float64(innerRadius-tickLen)*math.Cos(rad))
+		y2 := centerY - int(float64(innerRadius-tickLen)*math.Sin(rad))
+
+		DrawLine(img, x1, y1, x2, y2, innerGColor)
+	}
+
+	// Draw outer needle (from inner radius to outer radius, doesn't overlap inner gauge)
+	outerNeedleAngle := 180.0 - (outerPercentage / 100.0 * 180.0)
+	outerNeedleRad := outerNeedleAngle * math.Pi / 180.0
+	outerNeedleLen := outerRadius - 2
+
+	// Start from inner radius edge (doesn't go through inner gauge)
+	outerNeedleStartX := centerX + int(float64(innerRadius)*math.Cos(outerNeedleRad))
+	outerNeedleStartY := centerY - int(float64(innerRadius)*math.Sin(outerNeedleRad))
+
+	// End at outer radius
+	outerNeedleEndX := centerX + int(float64(outerNeedleLen)*math.Cos(outerNeedleRad))
+	outerNeedleEndY := centerY - int(float64(outerNeedleLen)*math.Sin(outerNeedleRad))
+
+	DrawLine(img, outerNeedleStartX, outerNeedleStartY, outerNeedleEndX, outerNeedleEndY, outerNColor)
+
+	// Draw inner needle (shorter, thinner)
+	innerNeedleAngle := 180.0 - (innerPercentage / 100.0 * 180.0)
+	innerNeedleRad := innerNeedleAngle * math.Pi / 180.0
+	innerNeedleLen := innerRadius - 2
+
+	innerNeedleX := centerX + int(float64(innerNeedleLen)*math.Cos(innerNeedleRad))
+	innerNeedleY := centerY - int(float64(innerNeedleLen)*math.Sin(innerNeedleRad))
+
+	DrawLine(img, centerX, centerY, innerNeedleX, innerNeedleY, innerNColor)
+
+	// Draw center point (use inner needle color since only inner needle touches center)
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			if centerX+dx >= 0 && centerX+dx < pos.W && centerY+dy >= 0 && centerY+dy < pos.H {
+				img.Set(centerX+dx, centerY+dy, innerNColor)
+			}
+		}
+	}
+}
+
+// DrawGauge draws a semicircular gauge with needle at a specific position
+//
+//nolint:gocyclo // Complex geometric calculations for gauge rendering
+func DrawGauge(img *image.Gray, x, y, width, height int, percentage float64, gaugeColor, needleColor uint8, showTicks bool, ticksColor uint8) {
+	centerX := x + width/2
+	centerY := y + height - 3 // Near bottom
+
+	// Radius of the gauge arc
+	radius := height - 6
+	if width/2 < radius {
+		radius = width/2 - 3
+	}
+
+	if radius <= 0 {
+		return
+	}
+
+	gColor := color.Gray{Y: gaugeColor}
+	nColor := color.Gray{Y: needleColor}
+	tColor := color.Gray{Y: ticksColor}
+
+	bounds := img.Bounds()
+
+	// Draw gauge arc (semicircle from 180° to 0°)
+	for angle := 180.0; angle >= 0; angle -= 2.0 {
+		rad := angle * math.Pi / 180.0
+		px := centerX + int(float64(radius)*math.Cos(rad))
+		py := centerY - int(float64(radius)*math.Sin(rad))
+
+		if px >= bounds.Min.X && px < bounds.Max.X && py >= bounds.Min.Y && py < bounds.Max.Y {
+			img.Set(px, py, gColor)
+		}
+	}
+
+	// Draw tick marks if enabled
+	if showTicks {
+		for tick := 0; tick <= 10; tick++ {
+			angle := 180.0 - float64(tick)*18.0 // 0-180 degrees in 10 steps
+			rad := angle * math.Pi / 180.0
+
+			// Outer point
+			x1 := centerX + int(float64(radius)*math.Cos(rad))
+			y1 := centerY - int(float64(radius)*math.Sin(rad))
+
+			// Inner point
+			tickLen := 3
+			if tick%5 == 0 {
+				tickLen = 5 // Longer ticks at 0%, 50%, 100%
+			}
+			x2 := centerX + int(float64(radius-tickLen)*math.Cos(rad))
+			y2 := centerY - int(float64(radius-tickLen)*math.Sin(rad))
+
+			DrawLine(img, x1, y1, x2, y2, tColor)
+		}
+	}
+
+	// Draw needle based on percentage
+	needleAngle := 180.0 - (percentage / 100.0 * 180.0)
+	needleRad := needleAngle * math.Pi / 180.0
+	needleLen := radius - 2
+
+	needleX := centerX + int(float64(needleLen)*math.Cos(needleRad))
+	needleY := centerY - int(float64(needleLen)*math.Sin(needleRad))
+
+	DrawLine(img, centerX, centerY, needleX, needleY, nColor)
+
+	// Draw center point
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			px := centerX + dx
+			py := centerY + dy
+			if px >= bounds.Min.X && px < bounds.Max.X && py >= bounds.Min.Y && py < bounds.Max.Y {
+				img.Set(px, py, nColor)
+			}
+		}
+	}
+}
+
+// DrawLine draws a line between two points (Bresenham's algorithm)
+func DrawLine(img *image.Gray, x0, y0, x1, y1 int, c color.Gray) {
+	dx := abs(x1 - x0)
+	dy := abs(y1 - y0)
+	sx := -1
+	if x0 < x1 {
+		sx = 1
+	}
+	sy := -1
+	if y0 < y1 {
+		sy = 1
+	}
+	err := dx - dy
+
+	for {
+		img.Set(x0, y0, c)
+
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x0 += sx
+		}
+		if e2 < dx {
+			err += dx
+			y0 += sy
+		}
+	}
+}
+
+// DrawCircle draws a circle with the given center and radius
+func DrawCircle(img *image.Gray, centerX, centerY, radius int, c color.Gray) {
+	// Bresenham's circle algorithm
+	x := 0
+	y := radius
+	d := 3 - 2*radius
+
+	drawCirclePoints(img, centerX, centerY, x, y, c)
+
+	for x <= y {
+		if d <= 0 {
+			d = d + 4*x + 6
+		} else {
+			d = d + 4*(x-y) + 10
+			y--
+		}
+		x++
+		drawCirclePoints(img, centerX, centerY, x, y, c)
+	}
+}
+
+// drawCirclePoints draws 8 symmetric points for a circle
+func drawCirclePoints(img *image.Gray, centerX, centerY, x, y int, c color.Gray) {
+	bounds := img.Bounds()
+
+	points := [][2]int{
+		{centerX + x, centerY + y},
+		{centerX - x, centerY + y},
+		{centerX + x, centerY - y},
+		{centerX - x, centerY - y},
+		{centerX + y, centerY + x},
+		{centerX - y, centerY + x},
+		{centerX + y, centerY - x},
+		{centerX - y, centerY - x},
+	}
+
+	for _, p := range points {
+		if p[0] >= bounds.Min.X && p[0] < bounds.Max.X &&
+			p[1] >= bounds.Min.Y && p[1] < bounds.Max.Y {
+			img.Set(p[0], p[1], c)
+		}
+	}
+}
+
+// DrawFilledCircle draws a filled circle with the given center and radius
+func DrawFilledCircle(img *image.Gray, centerX, centerY, radius int, c color.Gray) {
+	if img == nil || radius <= 0 {
+		return
+	}
+
+	bounds := img.Bounds()
+
+	// Simple filled circle using the midpoint circle equation
+	for y := -radius; y <= radius; y++ {
+		for x := -radius; x <= radius; x++ {
+			if x*x+y*y <= radius*radius {
+				px, py := centerX+x, centerY+y
+				if px >= bounds.Min.X && px < bounds.Max.X &&
+					py >= bounds.Min.Y && py < bounds.Max.Y {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+// DrawRectangle draws a rectangle border at the specified position
+//
+//nolint:gocyclo // Edge and corner handling requires multiple conditions
+func DrawRectangle(img *image.Gray, x, y, w, h int, borderColor uint8) {
+	if img == nil || w <= 0 || h <= 0 {
+		return
+	}
+
+	bounds := img.Bounds()
+	c := color.Gray{Y: borderColor}
+
+	// Top and bottom borders
+	for px := x; px < x+w; px++ {
+		if px >= bounds.Min.X && px < bounds.Max.X {
+			if y >= bounds.Min.Y && y < bounds.Max.Y {
+				img.Set(px, y, c)
+			}
+			if y+h-1 >= bounds.Min.Y && y+h-1 < bounds.Max.Y {
+				img.Set(px, y+h-1, c)
+			}
+		}
+	}
+
+	// Left and right borders
+	for py := y; py < y+h; py++ {
+		if py >= bounds.Min.Y && py < bounds.Max.Y {
+			if x >= bounds.Min.X && x < bounds.Max.X {
+				img.Set(x, py, c)
+			}
+			if x+w-1 >= bounds.Min.X && x+w-1 < bounds.Max.X {
+				img.Set(x+w-1, py, c)
+			}
+		}
+	}
+}
+
+// DrawDualHorizontalBar draws two horizontal bars stacked vertically (top/bottom)
+// Each bar gets half the height. Use color -1 to skip drawing a bar (transparent).
+func DrawDualHorizontalBar(img *image.Gray, x, y, w, h int, topPercent, bottomPercent float64, topColor, bottomColor int, drawBorder bool) {
+	halfH := h / 2
+
+	// Draw top bar if color is not transparent
+	if topColor >= 0 {
+		DrawHorizontalBar(img, x, y, w, halfH, topPercent, uint8(topColor), drawBorder)
+	}
+
+	// Draw bottom bar if color is not transparent
+	if bottomColor >= 0 {
+		DrawHorizontalBar(img, x, y+halfH, w, h-halfH, bottomPercent, uint8(bottomColor), drawBorder)
+	}
+}
+
+// DrawDualVerticalBar draws two vertical bars side by side (left/right)
+// Each bar gets half the width. Use color -1 to skip drawing a bar (transparent).
+func DrawDualVerticalBar(img *image.Gray, x, y, w, h int, leftPercent, rightPercent float64, leftColor, rightColor int, drawBorder bool) {
+	halfW := w / 2
+
+	// Draw left bar if color is not transparent
+	if leftColor >= 0 {
+		DrawVerticalBar(img, x, y, halfW, h, leftPercent, uint8(leftColor), drawBorder)
+	}
+
+	// Draw right bar if color is not transparent
+	if rightColor >= 0 {
+		DrawVerticalBar(img, x+halfW, y, w-halfW, h, rightPercent, uint8(rightColor), drawBorder)
+	}
+}
+
+// DrawFilledRectangle draws a filled rectangle with bounds checking
+func DrawFilledRectangle(img *image.Gray, x, y, width, height int, fillColor uint8) {
+	if img == nil || width <= 0 || height <= 0 {
+		return
+	}
+
+	bounds := img.Bounds()
+	c := color.Gray{Y: fillColor}
+
+	for py := y; py < y+height; py++ {
+		if py < bounds.Min.Y || py >= bounds.Max.Y {
+			continue
+		}
+		for px := x; px < x+width; px++ {
+			if px >= bounds.Min.X && px < bounds.Max.X {
+				img.SetGray(px, py, c)
+			}
+		}
+	}
+}
+
+// DrawHorizontalLine draws a horizontal line from x1 to x2 at y
+func DrawHorizontalLine(img *image.Gray, x1, x2, y int, lineColor uint8) {
+	if img == nil {
+		return
+	}
+
+	bounds := img.Bounds()
+	if y < bounds.Min.Y || y >= bounds.Max.Y {
+		return
+	}
+
+	// Ensure x1 <= x2
+	if x1 > x2 {
+		x1, x2 = x2, x1
+	}
+
+	c := color.Gray{Y: lineColor}
+	for x := x1; x <= x2; x++ {
+		if x >= bounds.Min.X && x < bounds.Max.X {
+			img.SetGray(x, y, c)
+		}
+	}
+}
+
+// DrawVerticalLine draws a vertical line from y1 to y2 at x
+func DrawVerticalLine(img *image.Gray, x, y1, y2 int, lineColor uint8) {
+	if img == nil {
+		return
+	}
+
+	bounds := img.Bounds()
+	if x < bounds.Min.X || x >= bounds.Max.X {
+		return
+	}
+
+	// Ensure y1 <= y2
+	if y1 > y2 {
+		y1, y2 = y2, y1
+	}
+
+	c := color.Gray{Y: lineColor}
+	for y := y1; y <= y2; y++ {
+		if y >= bounds.Min.Y && y < bounds.Max.Y {
+			img.SetGray(x, y, c)
+		}
+	}
+}
+
+// CopyGrayRegion copies src image to dst at the specified offset with bounds checking
+func CopyGrayRegion(dst, src *image.Gray, dstX, dstY int) {
+	if dst == nil || src == nil {
+		return
+	}
+
+	srcBounds := src.Bounds()
+	dstBounds := dst.Bounds()
+
+	for y := 0; y < srcBounds.Dy(); y++ {
+		for x := 0; x < srcBounds.Dx(); x++ {
+			dx := dstX + x
+			dy := dstY + y
+			if dx >= dstBounds.Min.X && dx < dstBounds.Max.X && dy >= dstBounds.Min.Y && dy < dstBounds.Max.Y {
+				dst.SetGray(dx, dy, src.GrayAt(x+srcBounds.Min.X, y+srcBounds.Min.Y))
+			}
+		}
+	}
+}
+
+// DrawCrossPattern draws a diagonal X pattern (typically used for mute indicators)
+// thickness specifies how many pixels thick each diagonal line should be
+func DrawCrossPattern(img *image.Gray, x, y, width, height, thickness int, patternColor uint8) {
+	if img == nil || width <= 0 || height <= 0 {
+		return
+	}
+
+	bounds := img.Bounds()
+	c := color.Gray{Y: patternColor}
+
+	// Draw thicker diagonal stripes
+	for i := 0; i < width && i < height; i++ {
+		for t := -thickness; t <= thickness; t++ {
+			// Diagonal \
+			py := y + i + t
+			px := x + i
+			if py >= bounds.Min.Y && py < bounds.Max.Y && px >= bounds.Min.X && px < bounds.Max.X {
+				img.SetGray(px, py, c)
+			}
+			// Diagonal /
+			py = y + height - i - 1 + t
+			if py >= bounds.Min.Y && py < bounds.Max.Y && px >= bounds.Min.X && px < bounds.Max.X {
+				img.SetGray(px, py, c)
+			}
+		}
+	}
+}
+
+// DrawGlyphWithBorder draws a glyph with a 1px border for visibility on any background
+// The border is drawn in all 8 directions (including diagonals) before drawing the glyph itself
+func DrawGlyphWithBorder(img *image.Gray, glyph *glyphs.Glyph, x, y int, borderColor, fillColor uint8) {
+	if glyph == nil {
+		return
+	}
+
+	border := color.Gray{Y: borderColor}
+	fill := color.Gray{Y: fillColor}
+
+	// Draw border (1px offset in all directions including diagonals)
+	glyphs.DrawGlyph(img, glyph, x-1, y, border)
+	glyphs.DrawGlyph(img, glyph, x+1, y, border)
+	glyphs.DrawGlyph(img, glyph, x, y-1, border)
+	glyphs.DrawGlyph(img, glyph, x, y+1, border)
+	glyphs.DrawGlyph(img, glyph, x-1, y-1, border)
+	glyphs.DrawGlyph(img, glyph, x+1, y-1, border)
+	glyphs.DrawGlyph(img, glyph, x-1, y+1, border)
+	glyphs.DrawGlyph(img, glyph, x+1, y+1, border)
+
+	// Draw glyph on top
+	glyphs.DrawGlyph(img, glyph, x, y, fill)
+}
+
+// DrawGlyphWithBackground draws a glyph with separate foreground and background colors
+// fgColor: color for glyph pixels (true values), use -1 for transparent (don't draw)
+// bgColor: color for non-glyph pixels (false values), use -1 for transparent (don't draw)
+// This is useful for icons that need a solid background or when both colors should be controllable
+func DrawGlyphWithBackground(img *image.Gray, glyph *glyphs.Glyph, x, y int, fgColor, bgColor int) {
+	if glyph == nil || img == nil {
+		return
+	}
+
+	bounds := img.Bounds()
+
+	for row := 0; row < glyph.Height && row < len(glyph.Data); row++ {
+		py := y + row
+		if py < bounds.Min.Y || py >= bounds.Max.Y {
+			continue
+		}
+
+		for col := 0; col < glyph.Width && col < len(glyph.Data[row]); col++ {
+			px := x + col
+			if px < bounds.Min.X || px >= bounds.Max.X {
+				continue
+			}
+
+			if glyph.Data[row][col] {
+				// Glyph pixel is set - draw foreground color if not transparent
+				if fgColor >= 0 {
+					img.SetGray(px, py, color.Gray{Y: uint8(fgColor)})
+				}
+			} else {
+				// Glyph pixel is not set - draw background color if not transparent
+				if bgColor >= 0 {
+					img.SetGray(px, py, color.Gray{Y: uint8(bgColor)})
+				}
+			}
+		}
+	}
+}
+
+// DrawGaugePeakHoldMark draws a small mark on a gauge arc at the given percentage position
+// centerX, centerY: center of the gauge arc
+// radius: radius of the gauge arc
+// percentage: 0.0 to 1.0 representing position on the semicircular arc (0=left, 1=right)
+// markLen: length of the mark extending outward from the arc
+func DrawGaugePeakHoldMark(img *image.Gray, centerX, centerY, radius int, percentage float64, markLen int, markColor uint8) {
+	if img == nil || radius <= 0 {
+		return
+	}
+
+	// Calculate angle for peak hold position (180 to 0 degrees)
+	angle := 180.0 - (percentage * 180.0)
+	rad := angle * math.Pi / 180.0
+
+	c := color.Gray{Y: markColor}
+
+	// Outer point (extended beyond arc)
+	x1 := centerX + int(float64(radius+markLen)*math.Cos(rad))
+	y1 := centerY - int(float64(radius+markLen)*math.Sin(rad))
+
+	// Inner point (on the arc)
+	x2 := centerX + int(float64(radius)*math.Cos(rad))
+	y2 := centerY - int(float64(radius)*math.Sin(rad))
+
+	DrawLine(img, x1, y1, x2, y2, c)
+}
+
+// DrawDualGraph draws two overlaid graphs on the same area
+// Use color -1 to skip drawing a graph (transparent).
+// Each graph has its own fill and line color.
+func DrawDualGraph(img *image.Gray, x, y, w, h int, history1, history2 []float64, maxHistory int, fill1, line1, fill2, line2 int) {
+	// Draw first graph if colors are valid
+	if fill1 >= 0 || line1 >= 0 {
+		effectiveFill := fill1
+		effectiveLine := line1
+		if effectiveLine < 0 {
+			effectiveLine = 255 // Default line color if only fill is transparent
+		}
+		DrawGraph(img, x, y, w, h, history1, maxHistory, effectiveFill, effectiveLine)
+	}
+
+	// Draw second graph on top if colors are valid
+	if fill2 >= 0 || line2 >= 0 {
+		effectiveFill := fill2
+		effectiveLine := line2
+		if effectiveLine < 0 {
+			effectiveLine = 255 // Default line color if only fill is transparent
+		}
+		DrawGraph(img, x, y, w, h, history2, maxHistory, effectiveFill, effectiveLine)
+	}
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}

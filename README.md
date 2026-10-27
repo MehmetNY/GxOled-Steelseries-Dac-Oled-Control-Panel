@@ -1,211 +1,185 @@
-# GxOled — SteelSeries Base Station OLED Enhancements (v0.4.0)
+# GxOled Advanced
 
-**A community-maintained desktop-app enhancement of [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled).** GxOled is a separately maintained application derived from the upstream source; its maintainer does not own or represent the upstream repository. It is an unofficial derivative, not an official upstream release, and it is not affiliated with, endorsed by, or sponsored by SteelSeries.
+**An unofficial OLED control panel for compatible SteelSeries base stations.**  
+Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, brightness controls, and a native Windows settings window — built on [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled).
 
-The project keeps the upstream USB HID implementation and command-line tool as its foundation, while adding desktop-app features for the 128×64 OLED on compatible SteelSeries base stations.
+<p align="center">
+  <img src="docs/images/gxoled-advanced-main.png" alt="GxOled Advanced native Windows settings — original General Control and Live OLED layout" width="900">
+</p>
 
-> **Please preserve upstream attribution.** The original project and its contributors made the core device integration possible. This derivative retains the upstream GPL license and source attribution. See [`LICENSE`](LICENSE).
+<p align="center">
+  <a href="https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.0"><strong>Download GxOled Advanced v0.5.0</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#features">Features</a>
+  &nbsp;·&nbsp;
+  <a href="#screenshots">Screenshots</a>
+  &nbsp;·&nbsp;
+  <a href="#developers--ai-agents">Developer guide</a>
+</p>
 
-## Some pictures: 
+> **Current release:** v0.5.0 is the stable **original-layout** Windows build. The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
 
-<table align="center">
-  <!-- First Row -->
+## Features
+
+- **Clock gallery** — digital standard/large, round/square analog, and Casio-inspired digital dial; a live 128 × 64 OLED preview.
+- **OLED burn-in mitigation** — an independent screen shifter plus clock-specific **Random Movements** and **No overlapping Pixels** modes. These distribute static pixel usage; they **do not guarantee** that burn-in cannot occur.
+- **SteelClock-Go animations** — **Matrix Rain**, **Hyperspace**, **Star Wars Intro**, and **Game of Life**, including editable/importable/exportable 128 × 64 JSON profiles. The original Go renderer runs as a helper; GxOled retains control of the USB/OLED connection.
+- **GIF playback & GIF Studio tab** — choose a GIF and start/stop its playback. A richer editor inspired by [GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio) (timeline, layers, transforms, dithering) is planned and **not yet available** in v0.5.0.
+- **Display & daily controls** — device brightness levels 1–10, idle screensaver/stock display behavior, native volume overlay cooperation, and optional media information.
+- **Native Windows settings** — original dark/light interface, English/Türkçe, Tray/Window/Hybrid modes, optional Windows startup, and saved preferences.
+
+## Screenshots
+
+The original Windows layout is pictured above. More screenshots from this project's existing gallery:
+
+<table>
   <tr>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/08087e53-ac59-4d96-aae2-86bff951c585" alt="Ekran Görüntüsü 1" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 1</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/fb2c1cee-2b0d-46e3-b5f1-37fb7fe9b70e" alt="Ekran Görüntüsü 2" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 2</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/e9859914-d039-4977-921e-a2932d05d144" alt="Ekran Görüntüsü 3" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 3</b></sub>
-    </td>
+    <td align="center"><a href="https://github.com/user-attachments/assets/08087e53-ac59-4d96-aae2-86bff951c585"><img src="https://github.com/user-attachments/assets/08087e53-ac59-4d96-aae2-86bff951c585" alt="GxOled screenshot 1" width="260"></a></td>
+    <td align="center"><a href="https://github.com/user-attachments/assets/fb2c1cee-2b0d-46e3-b5f1-37fb7fe9b70e"><img src="https://github.com/user-attachments/assets/fb2c1cee-2b0d-46e3-b5f1-37fb7fe9b70e" alt="GxOled screenshot 2" width="260"></a></td>
+    <td align="center"><a href="https://github.com/user-attachments/assets/e9859914-d039-4977-921e-a2932d05d144"><img src="https://github.com/user-attachments/assets/e9859914-d039-4977-921e-a2932d05d144" alt="GxOled screenshot 3" width="260"></a></td>
   </tr>
-  <!-- Second Row -->
   <tr>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/6509c9bb-7f34-4ff1-be66-3aa4269433f9" alt="Ekran Görüntüsü 4" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 4</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/00c89698-fb6e-40c8-aa4c-09924e6991c4" alt="Ekran Görüntüsü 5" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 5</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="https://github.com/user-attachments/assets/3a29fcb3-6db1-45e6-bc81-ceef59a82684" alt="Ekran Görüntüsü 6" style="max-height: 200px; width: auto;"/><br />
-      <sub><b>SS 6</b></sub>
-    </td>
+    <td align="center"><a href="https://github.com/user-attachments/assets/6509c9bb-7f34-4ff1-be66-3aa4269433f9"><img src="https://github.com/user-attachments/assets/6509c9bb-7f34-4ff1-be66-3aa4269433f9" alt="GxOled screenshot 4" width="260"></a></td>
+    <td align="center"><a href="https://github.com/user-attachments/assets/00c89698-fb6e-40c8-aa4c-09924e6991c4"><img src="https://github.com/user-attachments/assets/00c89698-fb6e-40c8-aa4c-09924e6991c4" alt="GxOled screenshot 5" width="260"></a></td>
+    <td align="center"><a href="https://github.com/user-attachments/assets/3a29fcb3-6db1-45e6-bc81-ceef59a82684"><img src="https://github.com/user-attachments/assets/3a29fcb3-6db1-45e6-bc81-ceef59a82684" alt="GxOled screenshot 6" width="260"></a></td>
   </tr>
 </table>
 
+## Get started
 
-## Features added in this derivative
+1. Download the [**v0.5.0 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.0) (`gxoled.exe` or Windows ZIP).
+2. Connect a supported **SteelSeries base station** over USB and run GxOled.
+3. Open **Settings** (using the tray icon or the configured window mode). Select **Clock**, **Animations**, **GIF Studio**, or **Display**.
+4. Use **Display → Clock burn-in protection** for clock movement, and **Display → OLED screen shift** for whole-screen shifting.
 
-The GxOled system-tray application includes the following enhancements over the upstream desktop app:
+**Compatibility:** the code identifies Arctis Nova Pro **Wired** (`12CB`, `12CD`) and **Wireless** (`12E0`, `12E5`, `225D`) base stations. Nova Elite (`2244`) is experimental and not hardware-verified here. These IDs are USB **product IDs**, not a promise of universal SteelSeries compatibility. Windows is the primary tested desktop target; Linux/macOS sources exist but are not equivalent to a verified Windows release.
 
-- **Four clock styles:** Digital → Original, Digital → Bold + Large, Analog → Round, and Analog → Square. Both analog styles have hour, minute, and second hands, numerals at 12/3/6/9, and tick marks at the other positions.
-- **Clock OLED burn-in mitigation:** `Random Movements` and `No overlapping Pixels` reposition the clock at minute boundaries. These features spread pixel use; they cannot guarantee that OLED aging or burn-in will never happen.
-- **GIF playback UI:** `Animation → Add GIF` opens the native file picker. A separate `Start / Stop animation` checkbox controls playback. The last GIF path and playback state are saved between launches.
-- **Screen brightness control:** a tray submenu exposes the device's protocol levels 1–10, labelled 10%–100%. These labels map to protocol steps; they do not claim a factory-measured linear luminance curve. Brightness is not changed until the user selects a level, and the saved level is re-applied after the base station reconnects.
-- **Windows startup toggle:** `Start GxOled with Windows` adds or removes the current executable from the current user's Windows `Run` registry key. This menu item is Windows-only.
-- **Native volume OSD compatibility:** physical base-station volume-dial events are distinguished from routine volume-status replies. OLED writes pause while the base station shows its own volume overlay, preventing GxOled from competing with the native screen; animation resumes without a rapid catch-up burst.
-- **Live clock rendering:** the clock continues to update while the Windows tray menu is open, rather than freezing on an old rendered time.
-- **Persistent configuration:** settings are saved atomically to the user's configuration file. On Windows this is normally `%APPDATA%\GxOled\config.toml`. Existing `%APPDATA%\ggoled_app.toml` settings are migrated on first launch; the original file is left as a backup. The old Windows startup entry is also migrated to the GxOled entry.
-- **Input hardening:** the desktop GIF loader bounds file size, canvas dimensions, frame count, and aggregate decoded pixels; custom font files are size-limited; external media text is sanitized and length-limited; invalid saved brightness and unavailable custom fonts are handled safely.
+**Türkçe kısa bilgi:** Saat, GIF ve animasyon seçeneklerini Windows ayar penceresinden yönetebilirsiniz. Yanık izi koruması riski azaltır, tamamen ortadan kaldırmaz. Ayrıntılı geliştirme bilgileri aşağıdadır.
 
-The command-line interface (`gxoled-cli`) remains available for scripting and direct display operations. The existing burn-in-related screen shifter and idle screensaver options are retained.
+## Developers & AI agents
 
-## Supported devices and compatibility scope
+The sections below are intentionally collapsed for everyday users. They are **source-oriented tutorials**, not promises that unreleased features already work. Development contributions are welcome; protect the stable UI and review changes against the actual device protocol.
 
-The program communicates with the **USB base station**, not directly with the headset. Compatibility therefore depends on the base station's USB product ID, HID interfaces, and report protocol. Headset variants connected through one of the supported base stations use that same base-station integration.
+<details>
+<summary><strong>1. Architecture, module map and single-owner OLED pipeline</strong></summary>
 
-| Base-station / product configuration | USB product ID | Status in this source |
-|---|---:|---|
-| SteelSeries Arctis Nova Pro Wired | `0x12CB` | Supported by the device matcher |
-| SteelSeries Arctis Nova Pro Wired (Xbox) | `0x12CD` | Supported by the device matcher |
-| SteelSeries Arctis Nova Pro Wireless | `0x12E0` | Supported by the device matcher |
-| SteelSeries Arctis Nova Pro Wireless (Xbox) | `0x12E5` | Supported by the device matcher |
-| SteelSeries Arctis Nova Pro Wireless (Xbox White) | `0x225D` | Supported by the device matcher |
-| SteelSeries Arctis Nova Elite base station | `0x2244` | Experimental / not hardware-verified by this project maintainer |
+GxOled combines a Rust device backend, an SDL3/tray application, a native Win32 settings window, and an embedded Go animation process:
 
-**This is not a claim of compatibility with every SteelSeries headset or every SteelSeries base station.** The current code explicitly matches the IDs listed above. Devices such as Arctis Pro Wireless/Wired and Nova Pro Omni are not confirmed by this source's device matcher; do not assume compatibility solely because the headset carries the SteelSeries name. Reports and patches for additional hardware are welcome.
+| Location | Purpose |
+|---|---|
+| `gxoled_lib/src/` | HID discovery, USB product IDs, report packing and device I/O |
+| `gxoled_draw/src/` | One-bit frame composition, GIF decoding, clocks, OLED screen shifting |
+| `gxoled_draw/src/casio.rs` | Casio-inspired 128 × 64 clock rendering |
+| `gxoled_app/src/main.rs` | Settings/configuration, tray events, clocks and animation state |
+| `gxoled_app/src/settings_window.rs` | **Original** native Windows settings UI — preserve its layout |
+| `gxoled_app/src/go_bridge.rs` | Starts the Go helper and consumes raw monochrome frames |
+| `go_animations/internal/widget/` | Four upstream-derived SteelClock-Go animation implementations |
+| `go_animations/cmd/renderer/` | Headless Go process and embedded default animation profiles |
+| `gxoled_cli/src/main.rs` | Standalone command-line controls |
 
-## Download and install
+**Frame ownership:** Go renders `128 × 64` single-bit frames (1,024 bytes, MSB-first). Rust receives those frames and is the **only component** that writes to the base station via USB/HID. The Go helper does not contact the device or GameSense. Do not add a second simultaneous OLED writer.
 
-### Windows
+**Third-party provenance:** the app is derived from [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled); the four Go widgets and supporting code derive from [pozitronik/steelclock-go](https://github.com/pozitronik/steelclock-go) (see [`go_animations/UPSTREAM.md`](go_animations/UPSTREAM.md)). [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio) is **inspiration for future editing features**, not a bundled Electron UI. Preserve licenses and attribution.
 
-1. Download `gxoled.exe` from this repository's **[Releases](https://github.com/MehmetNY/GxOled-v0.4.0/releases/tag/stable)** page.
-2. Run it. The desktop application starts in the system tray; right-click the tray icon to configure it.
-3. The CLI `gxoled-cli.exe` may also be attached to a release for users who want command-line controls.
+</details>
 
-For building the desktop application locally, see [Building from source](#building-from-source). On Windows/MSVC, extract the source to a short path such as `C:\gx`; SDL3's CMake build can fail when nested temporary paths become too long.
+<details>
+<summary><strong>2. Build and test on Windows (Rust + optional Go)</strong></summary>
 
-### Linux
-
-Use a Flatpak asset attached to this repository's release if one is provided, or build from source. The Flatpak bundle and helper files are under [`flatpak/`](flatpak/). For direct USB access outside Flatpak, install [`11-steelseries-arctis-nova.rules`](11-steelseries-arctis-nova.rules) into `/etc/udev/rules.d/` and reload udev rules:
-
-```sh
-sudo cp 11-steelseries-arctis-nova.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-The Flatpak build helper downloads Flathub's `shared-modules` repository into an ignored working directory when the required manifest is not already available. The external module is not vendored into this project's source tree. The Flatpak ID currently uses `io.github.gxoled.GxOled`; if your GitHub repository owner is not `gxoled`, change this ID and its filenames before submitting the app to Flathub.
-
-### macOS
-
-The source includes a macOS platform adapter, but a prebuilt macOS release is not currently promised. Build and test for your environment before relying on it.
-
-## Building from source
-
-Install the Rust toolchain and the native build tools required by your platform. Run all commands from the directory containing the top-level `Cargo.toml`.
-
-Check the desktop app:
+Prerequisites: current Rust toolchain with `cargo`, Visual Studio C++ build tools, and CMake/SDL3 build requirements. Use a **short checkout path** such as `C:\gx` to avoid deeply nested Windows/CMake paths. Build from the repository root:
 
 ```powershell
-cargo check --locked -p gxoled_app
-```
-
-Run the regression tests used for the desktop app and device/drawing code:
-
-```powershell
+cargo check --locked -p gxoled_app --features sdl3-static
 cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw --features gxoled_app/sdl3-static
-```
-
-Build the Windows desktop app with SDL3 compiled from source:
-
-```powershell
 cargo build --locked --release -p gxoled_app --features sdl3-static
 ```
 
-Build the command-line tool separately:
+The desktop executable is `target\release\gxoled.exe`, **not** automatically `release\gxoled.exe`. On Windows you can also invoke `Validate-Windows.cmd` for check → tests → build. The CLI can be built separately:
 
 ```powershell
 cargo build --locked --release -p gxoled_cli
 ```
 
-Expected outputs are `target/release/gxoled.exe` and `target/release/gxoled-cli.exe` on Windows, or their extensionless equivalents on Unix-like systems. The source repository does not include `target/` or prebuilt binaries; compiled artifacts should be attached to GitHub Releases rather than committed into the source tree.
-
-### systemd user service (Linux)
-
-```sh
-mkdir -p ~/.config/systemd/user/
-cp gxoled.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now gxoled.service
-```
-
-### Custom font
-
-Bitmap fonts are recommended for the small OLED to avoid rasterization artifacts, though TTF/OTF fonts can also be used. Edit `%APPDATA%\GxOled\config.toml` on Windows, or `$XDG_CONFIG_HOME/GxOled/config.toml` on Linux, and set:
-
-```toml
-[font]
-path = 'C:\Path\To\Font.ttf'
-size = 16.0
-```
-
-Restart the app after changing the font configuration. A missing, invalid, or over-limit custom font falls back to the built-in font.
-
-## Security and dependency check
-
-Optional security/dependency check:
+**Go renderer:** `go_animations/gxoled-animations.exe` is embedded at compile time using `include_bytes!`. The stable source contains this helper; do not delete it as “build junk”. When changing Go widget code, regenerate it **before** building the Rust app:
 
 ```powershell
-cargo install cargo-audit
-cargo audit
+cd go_animations
+go test ./...
+go build -trimpath -ldflags="-s -w" -o gxoled-animations.exe ./cmd/renderer
+cd ..
+cargo build --locked --release -p gxoled_app --features sdl3-static
 ```
 
-`cargo audit` may report maintenance or yanked-crate warnings even when no vulnerability advisory is found. Review the current output rather than treating every warning as an exploitable vulnerability.
+Go 1.23+ is required by `go_animations/go.mod` when rebuilding the helper. Avoid replacing the embedded helper without testing 128 × 64 frames and app startup. A successful compile does **not** validate physical OLED hardware.
 
-## CLI usage examples
+</details>
 
-Run `gxoled-cli --help` for the full command list.
+<details>
+<summary><strong>3. Animation profiles — JSON tutorial and validation rules</strong></summary>
+
+The built-in presets are in [`go_animations/profiles/128x64/`](go_animations/profiles/128x64/) and the embedded renderer copies are in [`go_animations/cmd/renderer/profiles/`](go_animations/cmd/renderer/profiles/). Supported widget types: `matrix`, `hyperspace`, `starwars_intro`, `game_of_life`.
+
+To make a custom animation profile in the Windows interface:
+
+1. Open **Animations**, choose one of the four engines and select **New Profile**, **Import** or **Edit**.
+2. For a new profile, use **Reset** in the JSON editor to populate a valid default template.
+3. Change settings for that widget only; save/apply the configuration and select the profile.
+4. Export the profile before experimenting with complex changes.
+
+The validator expects exactly **one widget**, display dimensions **128 × 64**, `refresh_rate_ms` from **10 to 1000**, and a type compatible with the selected engine. The profile is limited to **64 KiB**. For example, start from the complete [Matrix JSON profile](go_animations/profiles/128x64/matrix.json) rather than inventing required nested fields. Custom profiles are stored in `%APPDATA%\GxOled\profiles\custom\` on typical Windows installations.
+
+Preserve both profile-copy locations when you edit built-in defaults; `//go:embed` compiles the renderer's copies into its EXE. Test with `cd go_animations; go test ./...` and then rebuild the helper.
+
+</details>
+
+<details>
+<summary><strong>4. Burn-in controls, GIF playback and configuration behavior</strong></summary>
+
+**Two separate shift mechanisms:**
+
+- **OLED screen shift:** Off/Low/High applies a small translation during frame composition. The drawing module advances this on a roughly **90-second** cycle.
+- **Clock burn-in protection:** Off / **Random Movements** / **No overlapping Pixels** selects clock placement strategies, normally updated at minute boundaries. The second mode aims to reduce consecutive clock pixel overlap; the actual available space limits any guarantee. The Casio-inspired full-screen clock does not use the clock-specific repositioning, although the independent OLED shifter can still apply.
+
+OLED protection **reduces risk**, not panel wear. Avoid leaving static imagery at high brightness indefinitely.
+
+**GIF Studio in v0.5.0:** provides **Add GIF...** and **Start / Stop GIF** using the existing playback engine. It is not yet a layer editor, video editor, trim timeline, or image-compositing workflow. Keep development claims separate from release claims. The application already bounds image size, frame count and decoded pixels for safety.
+
+**Configuration:** on Windows settings normally reside at `%APPDATA%\GxOled\config.toml` and are persisted between launches. Keep backwards compatibility for existing serialized enum variants and stored paths. Windows startup registration belongs to the current user rather than a system-wide installation. Device brightness uses protocol steps 1–10, which are not calibrated percentages.
+
+</details>
+
+<details>
+<summary><strong>5. AI agent / contributor checklist — preserve the original UI</strong></summary>
+
+1. Read this README, [`CHANGELOG.md`](CHANGELOG.md), [`go_animations/UPSTREAM.md`](go_animations/UPSTREAM.md), then the target module. Establish whether a feature exists in **stable v0.5.0** before changing documentation.
+2. Use `v0.5.0` as the immutable release reference. Keep experiments on a separate feature branch. **Do not edit or redesign** the original Windows settings window merely to add a feature.
+3. The intended stable window uses **GENERAL CONTROL**, **CLOCK GALLERY**, and **LIVE OLED / MONOCHROME**; it is not the experimental card-grid **OLED CONTROL CENTER** layout. The reference screenshot is [`docs/images/gxoled-advanced-main.png`](docs/images/gxoled-advanced-main.png).
+4. Preserve the Rust HID ownership model, 128 × 64 output dimensions, configuration compatibility, and licensing notices. Do not remove `go_animations/gxoled-animations.exe` while Rust embeds it.
+5. For changes to display or animations, run the Rust checks/tests/build and the applicable Go tests. Manually validate Win32 controls, tray behavior, live preview, reconnect, GIF timing, and the base station when hardware is available.
+6. Record validation honestly: **compiled**, **unit-tested**, and **verified on a physical base station** are different statuses. Prefer reproducible focused commits, explain UI deltas, and publish development previews separately from stable tags.
+7. Review security and dependency updates (`cargo audit` when installed). Do not import a whole Electron/GameSense client into the HID app without an explicit architectural decision, a license review and a testable integration path.
+
+</details>
+
+<details>
+<summary><strong>6. Linux/CLI and alternative workflows</strong></summary>
+
+The CLI remains available for direct commands:
 
 ```sh
+gxoled-cli --help
 gxoled-cli brightness 1
 gxoled-cli text "Hello, World!"
-gxoled-cli img cool_image.png
-gxoled-cli anim -r 10 -l 20 frame1.png frame2.png frame3.png
+gxoled-cli img image.png
 gxoled-cli anim animation.gif
 ```
 
-For a video, extract frames with FFmpeg first:
+For direct USB permissions on Linux, review [`11-steelseries-arctis-nova.rules`](11-steelseries-arctis-nova.rules). A Flatpak manifest and systemd user service are provided under [`flatpak/`](flatpak/) and [`gxoled.service`](gxoled.service), but they require platform-specific packaging and testing. A prebuilt Linux or macOS binary is not promised by the Windows v0.5.0 release.
 
-```sh
-ffmpeg -i YOURVIDEO.mp4 -r 20 -vf "scale=w=128:h=64:force_original_aspect_ratio=1" frames/%05d.png
-# Bash
-gxoled-cli anim -r 20 frames/*
-# PowerShell
-gxoled-cli anim -r 20 (Get-ChildItem frames | ForEach-Object { $_.FullName })
-```
+</details>
 
-## Roadmap (ideas, not implemented in v0.4.0)
+## Credits & license
 
-- **GIF/image framing studio:** a visual selection and preview screen with finer control over aspect ratio, fit/crop (`contain`, `cover`, `stretch`), zoom, positioning, rotation, flipping, image tone, and threshold/dithering. The design will take inspiration from [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio). This is a reference for ideas, not a claim of affiliation or copied code.
-- **Additional OLED widgets:** consider implementing selected, suitable widget ideas similar in spirit to the clock, gauges, and status widgets in [pozitronik/steelclock-go](https://github.com/pozitronik/steelclock-go). Any such features would be implemented and reviewed for this codebase; they are not included in v0.4.0.
-- **Broader hardware support:** test additional base stations and add support only when the USB/HID protocol is verified.
+This is an **unofficial** GPL-3.0 derivative, not an official SteelSeries product. Its core originates in **[JerwuQu/ggoled](https://github.com/JerwuQu/ggoled)**; the integrated animation algorithms come from **[pozitronik/steelclock-go](https://github.com/pozitronik/steelclock-go)**. Future GIF editor concepts refer to **[D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio)**. All names belong to their respective owners. See [`LICENSE`](LICENSE) and upstream notices for redistribution obligations.
 
-## Support this project
-
-This is an **unofficial derivative** of [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled). Please keep the original project's authorship and contribution in mind; if you would like to support the underlying work, consider supporting the upstream project as well.
-
-If you still wish to support the maintenance of this derivative, an optional cryptocurrency donation is appreciated. There is no obligation to donate.
-
-**QR code:**
-<p align="left">
-  <img src="https://github.com/user-attachments/assets/5bea3a8b-e33e-4165-b9ac-de72813f11b1" width="150" alt="Bağış QR Kodu" />
-  <br />
-</p>
-
-
-
-## License and acknowledgements
-
-This derivative retains the upstream **GNU General Public License v3.0**. See [`LICENSE`](LICENSE) for the full terms. Preserve applicable copyright notices and attribution when redistributing or modifying the source. This repository is not affiliated with SteelSeries.
-
-- Original source project: [JerwuQu/ggoled](https://github.com/JerwuQu/ggoled)
-- GIF studio design inspiration for possible future work: [D4rkTT/GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio)
-- Widget inspiration for possible future work: [pozitronik/steelclock-go](https://github.com/pozitronik/steelclock-go)
+Project development has involved maintainer-led changes and AI-assisted coding/review. Contributions, bug reports and reproducible hardware findings are welcome.

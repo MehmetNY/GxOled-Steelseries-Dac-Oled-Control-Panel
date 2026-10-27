@@ -1,0 +1,20 @@
+[package]
+name = "gxoled_cli"
+version.workspace = true
+edition = "2024"
+
+[[bin]]
+name = "gxoled-cli"
+path = "src/main.rs"
+
+[features]
+# Dummy to simplify installs
+sdl3-static = []
+
+[dependencies]
+gxoled_lib = { path = "../gxoled_lib" }
+gxoled_draw = { path = "../gxoled_draw" }
+
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+spin_sleep = "1"
