@@ -61,3 +61,11 @@ This mode sends valid 0x93 bitmap frames at **at most 10 Hz for up to 7 seconds 
 Additionally, with GxOled **completely exited** (not just hiding the settings window), time how long the **DAC's own** volume-screen overlay stays visible after turning the dial. That baseline is essential for distinguishing the firmware's native overlay lifetime from application behavior. Do not infer physical display changes from `FRAME_OK`: it is only an acknowledged USB write.
 
 If `pulse` still takes ~6 seconds despite `FRAME_OK` writes at 100ms intervals, reducing the app timer or increasing redraw frequency further will not be a credible solution. Investigate firmware-native display priority, DAC menu options/firmware changes, and baseline native OSD timing instead. Protect all stable releases until hardware-verified.
+
+## Exact historical source differential test
+
+The complete `ggoled-volume-osd-bugfix.zip` generated on October 18, 2026 (the version physically verified on October 19 to show roughly 2.5s handoff) is preserved byte-for-byte at `diagnostics/legacy-2026-10-18/ggoled-volume-osd-bugfix.zip`. Its independent CI builds `ggoled-2026-10-18-known-good-comparison.exe` as a **diagnostic artifact only**.
+
+Compare that historical binary against current v0.5.1 with only one process running, the same USB DAC, similar clock/GIF state, and SteelSeries GG closed. The October 18 version uses original application names/config folders, so avoid accepting its startup-on-boot option during this one-time test. It has the old UI and is **not** a stable v0.5.1 replacement. The only purpose of the test is to establish whether the old *known-good executable* still restores the OLED in ~2.5s on the same present hardware.
+
+If it does, prioritize differential debugging of transport, event dispatch, rendering and frame scheduling between original and modern sources before claiming firmware cause. If it does not, the hardware or external environment/firmware behavior has changed since October 19 (or there is a baseline observation mismatch); inspect current DAC native OSD duration. Pulse testing already produced tearing and no speed improvement: do not turn it on by default or ship it.
