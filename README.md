@@ -8,7 +8,7 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
 </p>
 
 <p align="center">
-  <a href="https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.0"><strong>Download GxOled Advanced v0.5.0</strong></a>
+  <a href="https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.1"><strong>Download GxOled Advanced v0.5.1</strong></a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
@@ -17,7 +17,7 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
   <a href="#developers--ai-agents">Developer guide</a>
 </p>
 
-> **Current release:** v0.5.0 is the stable **original-layout** Windows build. The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
+> **Current release:** v0.5.1 is the **original-layout** Windows build with the DAC volume-OSD handoff correction. The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
 
 ## Features
 
@@ -47,7 +47,7 @@ The original Windows layout is pictured above. More screenshots from this projec
 
 ## Get started
 
-1. Download the [**v0.5.0 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.0) (`gxoled.exe` or Windows ZIP).
+1. Download the [**v0.5.0 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.1) (`gxoled.exe` or Windows ZIP).
 2. Connect a supported **SteelSeries base station** over USB and run GxOled.
 3. Open **Settings** (using the tray icon or the configured window mode). Select **Clock**, **Animations**, **GIF Studio**, or **Display**.
 4. Use **Display → Clock burn-in protection** for clock movement, and **Display → OLED screen shift** for whole-screen shifting.

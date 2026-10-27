@@ -1,3 +1,10 @@
+## GxOled Advanced v0.5.1 — DAC volume OSD handoff
+
+- Keep the native DAC volume overlay in control for 2.5 seconds after a genuine dial change. Ignore short-interval repeated HID reports of the same level, which could rearm the timer and extend handoff toward 5–6 seconds.
+- Preserve previously fixed clock/media layer cleanup, the existing settings UI geometry, and the embedded SteelClock-Go renderer.
+- Add regression tests for duplicate dial reports, changing dial levels, and new dial actions after a quiet interval.
+- Update the right-hand Windows settings label, the tray version label, and the Cargo workspace version to v0.5.1.
+
 ## 2026-10-24 – Two-column settings recovery
 
 - Restored a separate right-side OLED preview and About QR image instead of stacking them above the settings.

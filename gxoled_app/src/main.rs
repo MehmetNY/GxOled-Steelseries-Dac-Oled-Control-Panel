@@ -1013,7 +1013,7 @@ fn main() {
     assert!(!menu.is_null());
     let (menu_tx, menu_rx) = mpsc::channel::<MenuEvent>();
 
-    let version_label = format!("GxOled - v{}\0", env!("CARGO_PKG_VERSION"));
+    let version_label = format!("GxOled Advanced v{}\0", env!("CARGO_PKG_VERSION"));
     unsafe {
         let tm_version = sdl::SDL_InsertTrayEntryAt(menu, -1, version_label.as_ptr().cast(), sdl::SDL_TRAYENTRY_BUTTON);
         sdl::SDL_SetTrayEntryEnabled(tm_version, false);

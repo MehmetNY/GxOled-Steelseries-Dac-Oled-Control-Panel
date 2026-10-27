@@ -854,7 +854,7 @@ fn paint_panels(dc:Handle, s:&State,cw:i32,ch:i32){
         if s.page!=5 {
             draw_label(dc,"SteelSeries  •  128 x 64",
                 &Rect{left:p_x,top:346,right:cw-18,bottom:374},muted,false);
-            draw_label(dc,"GxOled Advanced v0.5.0",
+            draw_label(dc,"GxOled Advanced v0.5.1",
                 &Rect{left:p_x,top:395,right:cw-20,bottom:422},muted,false);
             rounded(dc,&Rect{left:p_x-4,top:458,right:cw-25,bottom:555},
                 if dark{color(30,35,43)}else{color(240,249,248)},border,16);

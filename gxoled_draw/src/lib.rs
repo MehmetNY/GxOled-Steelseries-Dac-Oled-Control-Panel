@@ -363,6 +363,21 @@ const RECONNECT_PERIOD: Duration = Duration::from_secs(1);
 // Stop sending custom frames until the knob has been idle for this long.
 const VOLUME_OSD_HOLD: Duration = Duration::from_millis(2500);
 
+/// A few DAC firmware versions repeat identical unsolicited dial events during
+/// the built-in OSD. Do not turn a 2.5-second hold into a 5–6-second hold.
+/// Real volume changes always extend the hold. The same level becomes a new
+/// action only after a full quiet interval with no reports.
+fn is_new_volume_dial_action(previous: &mut Option<(u8, Instant)>, level: u8, now: Instant) -> bool {
+    let is_new = match *previous {
+        Some((last_level, last_report)) => {
+            level != last_level || now.saturating_duration_since(last_report) >= VOLUME_OSD_HOLD
+        }
+        None => true,
+    };
+    *previous = Some((level, now));
+    is_new
+}
+
 fn run_draw_device_thread(
     mut dev: Device,
     layers: Arc<Mutex<LayerMap>>,
@@ -386,6 +401,7 @@ fn run_draw_device_thread(
     let mut last_frame_time = Instant::now();
     let mut volume_osd_until: Option<Instant> = None;
     let mut volume_osd_started: Option<Instant> = None;
+    let mut last_volume_dial_report: Option<(u8, Instant)> = None;
     loop {
         let time = Instant::now();
         let mut stop_after_frame = false;
@@ -426,10 +442,12 @@ fn run_draw_device_thread(
                 vec![]
             });
             for event in events {
-                if matches!(&event, DeviceEvent::VolumeDial { .. }) {
+                if let DeviceEvent::VolumeDial { volume } = &event {
                     let event_time = Instant::now();
-                    volume_osd_started.get_or_insert(event_time);
-                    volume_osd_until = Some(event_time + VOLUME_OSD_HOLD);
+                    if is_new_volume_dial_action(&mut last_volume_dial_report, *volume, event_time) {
+                        volume_osd_started.get_or_insert(event_time);
+                        volume_osd_until = Some(event_time + VOLUME_OSD_HOLD);
+                    }
                 }
                 event_sender.send(DrawEvent::DeviceEvent(event)).unwrap();
             }
@@ -1018,3 +1036,38 @@ mod animation_timing_tests {
 
 /// Pixel-accurate 128x64 preview of the Casio-inspired clock.
 pub fn casio_clock_preview(twelve_hour: bool, turkish: bool) -> Bitmap { casio::render(Local::now(), twelve_hour, turkish) }
+
+#[cfg(test)]
+mod volume_osd_dedup_tests {
+    use super::{is_new_volume_dial_action, VOLUME_OSD_HOLD};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn duplicate_firmware_reports_do_not_extend_hold() {
+        let start = Instant::now();
+        let mut previous = None;
+        assert!(is_new_volume_dial_action(&mut previous, 20, start));
+        for milliseconds in [500, 1600, 2400] {
+            assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(milliseconds)));
+        }
+        assert_eq!(VOLUME_OSD_HOLD, Duration::from_millis(2500));
+    }
+
+    #[test]
+    fn volume_changes_rearm_timer() {
+        let start = Instant::now();
+        let mut previous = None;
+        assert!(is_new_volume_dial_action(&mut previous, 20, start));
+        assert!(is_new_volume_dial_action(&mut previous, 21, start + Duration::from_millis(80)));
+        assert!(is_new_volume_dial_action(&mut previous, 22, start + Duration::from_millis(150)));
+    }
+
+    #[test]
+    fn same_level_after_silence_is_new_dial_action() {
+        let start = Instant::now();
+        let mut previous = None;
+        assert!(is_new_volume_dial_action(&mut previous, 20, start));
+        assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(200)));
+        assert!(is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(2800)));
+    }
+}
