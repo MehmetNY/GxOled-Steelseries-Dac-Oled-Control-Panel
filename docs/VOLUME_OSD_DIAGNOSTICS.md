@@ -27,3 +27,23 @@ The original 2026-10-18 code patch (confirmed on hardware) suppressed OLED write
 - `no-hold` still waits 5–6s despite successful `FRAME_OK`: firmware display priority is implicated; do not ship arbitrary shorter timeouts as a fix.
 
 A stable v0.5.1 Release must **not** be replaced until at least one tested change actually restores the intended native volume overlay and approximately 2.5-second handoff on physical hardware.
+
+## Findings from the user's October 28 hardware trials
+
+| Trial | End-of-hold / first successful USB OLED write | Physical return |
+| --- | --- | --- |
+| Default | Last DIAL 16,601ms, HOLD_END 19,101ms, FRAME_OK 19,105ms (2,504ms later) | ~6 seconds |
+| Legacy | Last DIAL in the final trial 42,467ms, FRAME_OK 44,971ms (2,504ms later) | 4–5 seconds |
+| No-hold | Last DIAL in first trial 8,176ms, FRAME_OK 8,379ms (203ms later) | ~6 seconds |
+
+No-hold is decisive: the program is **successfully sending** custom OLED frames within 203ms, but the actual panel does not visibly relinquish its native volume UI for several seconds. Thus a 2,500ms software constant cannot, by itself, explain the physical delay. A successful HID feature transfer is not proof that the firmware chose to display the frame.
+
+### Next isolated test (important)
+
+Repeat **only `no-hold`** with SteelSeries GG **fully exited using the system-tray Quit option**, and with Sonar audio routing implications understood. The helper now writes a separate `.processes.txt` snapshot. Compare physical return time with GG running versus closed. SteelClock-Go's GameDAC troubleshooting documentation separately warns that SteelSeries GG can periodically redraw or override the base-station OLED while sharing the same device HID interface.
+
+- If handoff becomes immediate when GG is closed: investigate GG/Engine process contention, avoiding automatic termination and preserving Sonar functionality.
+- If handoff remains 5–6 seconds even when GG is closed and `no-hold` writes succeed: strong evidence for device-side native-volume-OSD priority. The currently documented USB protocol offers a draw command (`0x93`), return-to-native-UI (`0x95`), and brightness (`0x85`); **none is documented as a safe native-OSD-dismiss command**. Do not send unverified HID commands.
+- If multiple GxOled-related processes appear: isolate process conflicts before altering DAC firmware logic. The launch helper already refuses to run when it detects an active GxOled instance.
+
+This remains diagnostic work; leave the v0.5.1 stable Release unchanged until a physically verified solution exists.
