@@ -29,6 +29,8 @@ jobs:
           if ($ui.Contains('OLED CONTROL CENTER')) { throw 'The unwanted card-based redesign is present.' }
           if (-not (Test-Path 'go_animations/gxoled-animations.exe')) { throw 'Original embedded Go helper is missing.' }
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ''
       - name: Cargo check
         run: cargo check --locked -p gxoled_app --features sdl3-static
       - name: Unit tests
