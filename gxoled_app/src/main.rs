@@ -872,7 +872,6 @@ enum MenuEvent {
     #[cfg(target_os = "windows")]
     ToggleMediaFromWindow,
     #[cfg(target_os = "windows")]
-    SetMediaMode(MediaMode),
     #[cfg(target_os = "windows")]
     OpenGifPickerFromWindow,
     #[cfg(target_os = "windows")]
@@ -1505,16 +1504,6 @@ fn main() {
                     config.idle_timeout = !config.idle_timeout;
                     unsafe { sdl::SDL_SetTrayEntryChecked(tm_idle_check,config.idle_timeout); }
                     config_updated = true;
-                }
-                #[cfg(target_os = "windows")]
-                MenuEvent::SetMediaMode(_mode) => {
-                    // Clock+Media was intentionally withdrawn; do not reactivate
-                    // it even if an old sender/config requests the legacy mode.
-                    config.media_mode=MediaMode::MediaOnly;
-                    config_updated=true;
-                    dev.remove_layers(&media_layers);
-                    media_layers.clear();
-                    last_media=None;
                 }
                 #[cfg(target_os = "windows")]
                 MenuEvent::OpenGifPickerFromWindow => start_gif_file_picker(&menu_tx),
