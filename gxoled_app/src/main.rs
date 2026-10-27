@@ -968,6 +968,17 @@ fn start_gif_file_picker(tx: &mpsc::Sender<MenuEvent>) {
     }
 }
 
+// The Windows media session can disappear, or a user can disable metadata,
+// while old OLED layers are still present. Reconcile both content and layer state.
+fn media_layers_need_refresh(
+    current: &Option<Media>,
+    previous: &Option<Media>,
+    layers_present: bool,
+    layers_expected: bool,
+) -> bool {
+    current != previous || layers_present != layers_expected
+}
+
 fn main() {
     // Initial loading
     let mut config = Config::load();
@@ -1450,6 +1461,12 @@ fn main() {
                     config_updated = true;
                     config.show_media = unsafe { sdl::SDL_GetTrayEntryChecked(tm_media_check) };
                     config.idle_timeout = unsafe { sdl::SDL_GetTrayEntryChecked(tm_idle_check) };
+                    if !config.show_media {
+                        // Clear immediately, even when last_media was already None.
+                        dev.remove_layers(&media_layers);
+                        media_layers.clear();
+                    }
+                    last_media = None;
                     last_clock_shift_minute = None;
                 }
                 MenuEvent::SetTimeMode(mode) => {
@@ -1495,6 +1512,8 @@ fn main() {
                     // it even if an old sender/config requests the legacy mode.
                     config.media_mode=MediaMode::MediaOnly;
                     config_updated=true;
+                    dev.remove_layers(&media_layers);
+                    media_layers.clear();
                     last_media=None;
                 }
                 #[cfg(target_os = "windows")]
@@ -1519,6 +1538,10 @@ fn main() {
                     if os.supports_media() {
                         config.show_media = !config.show_media;
                         unsafe { sdl::SDL_SetTrayEntryChecked(tm_media_check,config.show_media); }
+                        if !config.show_media {
+                            dev.remove_layers(&media_layers);
+                            media_layers.clear();
+                        }
                         config_updated = true;
                         last_media = None;
                     }
@@ -1993,7 +2016,13 @@ fn main() {
                 }
 
                 // Media
-                if media != last_media {
+                // The visible layer state can outlive last_media (for example when
+                // media is turned off in Settings). Never retain such stale pixels.
+                let media_layers_expected = media.is_some()
+                    && (config.time_mode == ConfigTimeMode::Off || clock_hidden_for_media);
+                if media_layers_need_refresh(
+                    &media, &last_media, !media_layers.is_empty(), media_layers_expected,
+                ) {
                     dev.remove_layers(&media_layers);
                     if let Some(m) = &media {
                         let media_text = format!("{}\n{}", m.title, m.artist);
@@ -2053,4 +2082,28 @@ fn main() {
         ConfigQuitMode::StockUi => dev.return_to_ui(),
     }
     .unwrap();
+}
+
+#[cfg(test)]
+mod media_layer_state_tests {
+    use super::{Media, media_layers_need_refresh};
+
+    #[test]
+    fn disable_media_clears_stale_layers_even_when_last_media_is_none() {
+        assert!(media_layers_need_refresh(&None, &None, true, false));
+        assert!(!media_layers_need_refresh(&None, &None, false, false));
+    }
+
+    #[test]
+    fn stopped_video_clears_previous_media() {
+        let previous = Some(Media { title: "Video".into(), artist: "Channel".into() });
+        assert!(media_layers_need_refresh(&None, &previous, true, false));
+    }
+
+    #[test]
+    fn active_media_is_rebuilt_when_layers_are_missing() {
+        let media = Some(Media { title: "Playing".into(), artist: "Artist".into() });
+        assert!(media_layers_need_refresh(&media, &media, false, true));
+        assert!(!media_layers_need_refresh(&media, &media, true, true));
+    }
 }
