@@ -1,0 +1,11 @@
+--- a/gxoled_app/src/settings_window.rs
++++ b/gxoled_app/src/settings_window.rs
+@@ -928,7 +928,7 @@
+     let mut area=Rect{left:info.rect.left+1,top:info.rect.top+1,
+         right:info.rect.right-1,bottom:info.rect.bottom-1};
+     if area.right<=area.left || area.bottom<=area.top{return;}
+-    paint_card(info.dc,area,fill,border,10);
++    paint_card(info.dc,Rect{left:area.left,top:area.top,right:area.right,bottom:area.bottom},fill,border,10);
+     if is_active{
+         let brush=unsafe{CreateSolidBrush(accent())};
+         let bar=Rect{left:area.left+1,top:area.top+8,right:area.left+4,bottom:area.bottom-8};
