@@ -402,6 +402,27 @@ fn run_draw_device_thread(
     let mut volume_osd_until: Option<Instant> = None;
     let mut volume_osd_started: Option<Instant> = None;
     let mut last_volume_dial_report: Option<(u8, Instant)> = None;
+    // Explicitly opt-in diagnostics. Normal releases have no file writes.
+    let osd_trace_file = std::env::var_os("GXOLED_OSD_TRACE_FILE");
+    let osd_session_start = Instant::now();
+    let osd_hold = std::env::var("GXOLED_OSD_HOLD_MS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|ms| *ms <= 10000)
+        .map(Duration::from_millis)
+        .unwrap_or(VOLUME_OSD_HOLD);
+    let osd_legacy = std::env::var("GXOLED_OSD_LEGACY").ok().as_deref() == Some("1");
+    let osd_log = |message: &str| {
+        if let Some(path) = &osd_trace_file {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                let _ = writeln!(f, "[{}ms pid={}] {}", osd_session_start.elapsed().as_millis(),
+                    std::process::id(), message);
+            }
+        }
+    };
+    osd_log(&format!("START hold_ms={} legacy={} fps={}", osd_hold.as_millis(), osd_legacy, fps));
+    let mut osd_trace_remaining_frames = 0u8;
     loop {
         let time = Instant::now();
         let mut stop_after_frame = false;
@@ -436,18 +457,49 @@ fn run_draw_device_thread(
         // Extend the yield period on every volume event, so continuous dial movement
         // keeps the native UI in control until 2.5 seconds after the last event.
         if connected {
-            let events = dev.get_events().unwrap_or_else(|_| {
+            let read_start = Instant::now();
+            let events = dev.get_events().unwrap_or_else(|err| {
+                osd_log(&format!("HID_READ_ERROR {err}"));
                 connected = false;
                 event_sender.send(DrawEvent::DeviceDisconnected).unwrap();
                 vec![]
             });
+            if osd_trace_file.is_some() && read_start.elapsed() > Duration::from_millis(100) {
+                osd_log(&format!("HID_READ_SLOW duration_ms={}", read_start.elapsed().as_millis()));
+            }
             for event in events {
-                if let DeviceEvent::VolumeDial { volume } = &event {
-                    let event_time = Instant::now();
-                    if is_new_volume_dial_action(&mut last_volume_dial_report, *volume, event_time) {
-                        volume_osd_started.get_or_insert(event_time);
-                        volume_osd_until = Some(event_time + VOLUME_OSD_HOLD);
+                let event_time = Instant::now();
+                let mut arm = false;
+                match &event {
+                    DeviceEvent::VolumeDial { volume } => {
+                        let since_last = last_volume_dial_report
+                            .map(|(_, t)| event_time.saturating_duration_since(t).as_millis());
+                        arm = if osd_legacy {
+                            last_volume_dial_report = Some((*volume, event_time));
+                            true
+                        } else {
+                            is_new_volume_dial_action(&mut last_volume_dial_report, *volume, event_time)
+                        };
+                        osd_log(&format!("DIAL level={volume} accepted={arm} since_previous_ms={since_last:?}"));
                     }
+                    DeviceEvent::Volume { volume } if osd_legacy => {
+                        // 2026-10-18 working behavior: old parser combined unsolicited and
+                        // queried volume replies into the same Volume event.
+                        arm = true;
+                        osd_log(&format!("VOLUME_QUERY level={volume} accepted=true [legacy]"));
+                    }
+                    DeviceEvent::Volume { volume } => {
+                        osd_log(&format!("VOLUME_QUERY level={volume} accepted=false"));
+                    }
+                    _ => {}
+                }
+                if arm {
+                    volume_osd_started.get_or_insert(event_time);
+                    volume_osd_until = Some(event_time + osd_hold);
+                    osd_trace_remaining_frames = 3;
+                    osd_log(&format!("HOLD_ARM duration_ms={} until_ms={}",
+                        osd_hold.as_millis(),
+                        event_time.duration_since(osd_session_start).as_millis() + osd_hold.as_millis()));
                 }
                 event_sender.send(DrawEvent::DeviceEvent(event)).unwrap();
             }
@@ -456,6 +508,8 @@ fn run_draw_device_thread(
         let volume_osd_active = volume_osd_until.is_some_and(|until| Instant::now() < until);
         if !volume_osd_active {
             if let Some(suppression_started) = volume_osd_started.take() {
+                osd_log(&format!("HOLD_END elapsed_ms={}",
+                    Instant::now().saturating_duration_since(suppression_started).as_millis()));
                 // Shift animation deadlines by the exact time yielded to the firmware. Without
                 // this, GIF playback would rush through the frames that elapsed during the OSD.
                 let paused_for = Instant::now().saturating_duration_since(suppression_started);
@@ -583,12 +637,20 @@ fn run_draw_device_thread(
             let force_redraw = frame_time.duration_since(last_frame_time) >= Duration::from_secs(1);
             if screen != prev_screen || force_redraw {
                 last_frame_time = frame_time;
-                if let Err(_err) = dev.draw(&screen, 0, 0) {
+                let draw_start = Instant::now();
+                if let Err(err) = dev.draw(&screen, 0, 0) {
+                    osd_log(&format!("FRAME_ERROR elapsed_ms={} error={err}",
+                        draw_start.elapsed().as_millis()));
                     if connected {
                         connected = false;
                         event_sender.send(DrawEvent::DeviceDisconnected).unwrap();
                     }
                 } else {
+                    if osd_trace_remaining_frames > 0 {
+                        osd_log(&format!("FRAME_OK write_ms={} after_hold=true",
+                            draw_start.elapsed().as_millis()));
+                        osd_trace_remaining_frames -= 1;
+                    }
                     prev_screen = screen;
                 }
             }
