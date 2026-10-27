@@ -190,7 +190,6 @@ unsafe extern "system" {
     fn FillRect(dc:Handle,rect:*const Rect,brush:Handle)->i32;
     fn SetBkMode(dc:Handle,mode:i32)->i32;
     fn SetTextColor(dc:Handle,color:u32)->u32;
-    fn TextOutW(dc:Handle,x:i32,y:i32,text:*const u16,count:i32)->i32;
     fn DrawTextW(dc:Handle,text:*const u16,length:i32,rect:*mut Rect,format:u32)->i32;
 }
 #[link(name="kernel32")]
