@@ -36,7 +36,7 @@ let snapshots=[],redoSnapshots=[];
 function checkpoint(){snapshots.push({settings:{...project,layers:undefined},layers:project.layers.map(l=>({...l,frames:l.frames})),active});if(snapshots.length>80)snapshots.shift();redoSnapshots=[]}
 function recover(state){if(!state)return;project={...state.settings,layers:state.layers};active=state.active;refresh()}
 function undo(){if(!snapshots.length)return;redoSnapshots.push({settings:{...project,layers:undefined},layers:project.layers.map(l=>({...l,frames:l.frames})),active});recover(snapshots.pop())}
-function redo(){if(!redoSnapshots.length)return;checkpoint();recover(redoSnapshots.pop())}
+function redo(){if(!redoSnapshots.length)return;snapshots.push({settings:{...project,layers:undefined},layers:project.layers.map(l=>({...l,frames:l.frames})),active});recover(redoSnapshots.pop())}
 function sourceTime(layer,t){let local=t-layer.start;if(local<0||local>=layer.len)return null;const inT=clamp(layer.in,0,layer.sourceDuration),outT=clamp(layer.out,layer.in+1,layer.sourceDuration);return inT+(local%(outT-inT))}
 function getFrame(layer,t){if(!layer.frames?.length)return null;const target=sourceTime(layer,t);if(target===null)return null;let accum=0;for(const f of layer.frames){accum+=f.delay;if(target<accum)return f.image}return layer.frames.at(-1).image}
 function composite(t){mc.setTransform(1,0,0,1,0,0);mc.clearRect(0,0,W,H);mc.fillStyle='#000';mc.fillRect(0,0,W,H);
