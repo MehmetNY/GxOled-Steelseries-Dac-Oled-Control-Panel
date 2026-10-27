@@ -760,6 +760,7 @@ dependencies = [
  "rfd",
  "sdl3-sys",
  "serde",
+ "serde_json",
  "toml",
  "wayland-client",
  "wayland-protocols",
