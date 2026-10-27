@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)][string]$ExePath,
-    [ValidateSet("default", "legacy", "no-hold")][string]$Mode = "default"
+    [ValidateSet("default", "legacy", "no-hold", "pulse")][string]$Mode = "default"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,7 +36,8 @@ $possibleWriters | Select-Object ProcessId, Name, ExecutablePath | Format-List |
 Write-Host "Process snapshot: $processLogPath"
 $env:GXOLED_OSD_TRACE_FILE = $logPath
 $env:GXOLED_OSD_LEGACY = if ($Mode -eq 'legacy') { '1' } else { '0' }
-$env:GXOLED_OSD_HOLD_MS = if ($Mode -eq 'no-hold') { '0' } else { '2500' }
+$env:GXOLED_OSD_HOLD_MS = if ($Mode -in @('no-hold','pulse')) { '0' } else { '2500' }
+$env:GXOLED_OSD_PULSE = if ($Mode -eq 'pulse') { '1' } else { '0' }
 
 Write-Host "Diagnostic mode: $Mode"
 Write-Host "Log file: $logPath"
@@ -49,3 +50,4 @@ if (Test-Path $logPath) { Get-Content -LiteralPath $logPath | Select-Object -Las
 Remove-Item Env:\GXOLED_OSD_TRACE_FILE -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_LEGACY -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_HOLD_MS -ErrorAction SilentlyContinue
+Remove-Item Env:\GXOLED_OSD_PULSE -ErrorAction SilentlyContinue
