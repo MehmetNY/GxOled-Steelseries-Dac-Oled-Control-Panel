@@ -978,7 +978,45 @@ fn media_layers_need_refresh(
     current != previous || layers_present != layers_expected
 }
 
+/// Windows: report whether another GxOled is already running. Two copies would both write
+/// OLED frames and both react to the dial, which looks like lag or flicker and makes timing
+/// measurements meaningless. The mutex handle is deliberately never closed; it lives as long
+/// as the process.
+#[cfg(target_os = "windows")]
+fn another_instance_is_running() -> bool {
+    use windows_sys::Win32::{
+        Foundation::{ERROR_ALREADY_EXISTS, GetLastError},
+        System::Threading::CreateMutexW,
+    };
+    let name: Vec<u16> = "Local\\GxOled.Advanced.SingleInstance"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if handle.is_null() {
+        // The guard itself failed: never block startup because of it.
+        return false;
+    }
+    // Must be read immediately after CreateMutexW.
+    unsafe { GetLastError() == ERROR_ALREADY_EXISTS }
+}
+
 fn main() {
+    #[cfg(target_os = "windows")]
+    {
+        if another_instance_is_running() {
+            MessageDialog::new()
+                .set_level(MessageLevel::Info)
+                .set_title("GxOled")
+                .set_description(
+                    "GxOled is already running. Look for its icon in the system tray, and use \
+                     'Quit GxOled' there before starting another copy.",
+                )
+                .show();
+            return;
+        }
+    }
+
     // Initial loading
     let mut config = Config::load();
     #[cfg(target_os = "windows")]
@@ -2094,5 +2132,16 @@ mod media_layer_state_tests {
         let media = Some(Media { title: "Playing".into(), artist: "Artist".into() });
         assert!(media_layers_need_refresh(&media, &media, false, true));
         assert!(!media_layers_need_refresh(&media, &media, true, true));
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod single_instance_tests {
+    use super::another_instance_is_running;
+
+    #[test]
+    fn second_call_in_the_same_process_sees_the_mutex() {
+        assert!(!another_instance_is_running());
+        assert!(another_instance_is_running());
     }
 }
