@@ -4,6 +4,7 @@
 - Preserve previously fixed clock/media layer cleanup, the existing settings UI geometry, and the embedded SteelClock-Go renderer.
 - Add regression tests for duplicate dial reports, changing dial levels, and new dial actions after a quiet interval.
 - Update the right-hand Windows settings label, the tray version label, and the Cargo workspace version to v0.5.1.
+- Known issue (hardware-measured 2026-10-28): the panel still returns to GxOled about 6 seconds after a dial turn. In the `no-hold` diagnostic the DAC accepted a frame ~200 ms after the last dial report and the delay did not change, so it is not caused by the 2.5 s software hold or by repeated dial reports. The de-duplication above can only shorten the hold and did not fix the delay. Investigation notes: `docs/VOLUME_OSD_DIAGNOSTICS.md` on branch `diagnostics/volume-osd-timing`.
 
 ## 2026-10-24 – Two-column settings recovery
 
