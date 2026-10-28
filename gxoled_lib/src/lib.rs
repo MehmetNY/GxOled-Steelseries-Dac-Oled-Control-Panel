@@ -41,6 +41,23 @@ pub enum DeviceEvent {
         bluetooth: bool,
         bluetooth_on: bool,
     },
+    /// Reply to the `0x80` "UX settings" query. Field layout taken from the device spec as
+    /// documented by loteran/Arctis-Sound-Manager (`ux_settings`): every field is one raw byte.
+    UxSettings {
+        dim_timer: u8,
+        oled_brightness: u8,
+        idle_brightness: u8,
+        /// 0 = detailed home screen, 1 = simple.
+        home_screen_type: u8,
+        home_screen_mic_mute: u8,
+        /// Whether the base station believes SteelSeries Sonar is present (`0x8d`).
+        sonar_present: u8,
+    },
+    /// A report that the application does not interpret. Only produced so diagnostics can
+    /// log it; the draw thread never forwards it to the UI.
+    Unknown {
+        raw: [u8; 16],
+    },
 }
 
 // Parse one 64-byte HID report using the report ID exposed by this device's info
@@ -76,8 +93,15 @@ fn parse_event_report(buf: &[u8; 64], info_report_id: u8) -> Vec<DeviceEvent> {
             volume: 0x38u8.saturating_sub(buf[3]),
         }],
 
-        // Unknown data response; not used by the application.
-        (id, 0x80) if id == info_report_id => vec![],
+        // UX settings reply (dim timer, brightness, home screen type, Sonar flag).
+        (id, 0x80) if id == info_report_id => vec![DeviceEvent::UxSettings {
+            dim_timer: buf[2],
+            oled_brightness: buf[3],
+            idle_brightness: buf[4],
+            home_screen_type: buf[5],
+            home_screen_mic_mute: buf[6],
+            sonar_present: buf[7],
+        }],
 
         // General device state query response.
         (id, 0xb0) if id == info_report_id => vec![
@@ -98,7 +122,11 @@ fn parse_event_report(buf: &[u8; 64], info_report_id: u8) -> Vec<DeviceEvent> {
             charging: buf[3],
         }],
 
-        _ => vec![],
+        _ => {
+            let mut raw = [0u8; 16];
+            raw.copy_from_slice(&buf[..16]);
+            vec![DeviceEvent::Unknown { raw }]
+        }
     }
 }
 
@@ -127,6 +155,7 @@ pub struct Device {
     pub height: usize,
     oled_report_id: u8,
     info_report_id: u8,
+    product_id: u16,
 }
 impl Device {
     /// Connect to a SteelSeries GG device.
@@ -225,7 +254,13 @@ impl Device {
             height: SCREEN_HEIGHT,
             oled_report_id,
             info_report_id,
+            product_id: device_infos[0].product_id(),
         })
+    }
+
+    /// USB product ID of the connected base station (for diagnostics).
+    pub fn product_id(&self) -> u16 {
+        self.product_id
     }
 
     /// Dump the full device tree info for all SteelSeries devices to stdout for debug purposes
@@ -404,6 +439,60 @@ impl Device {
         Ok(())
     }
 
+    /// Send a 64-byte command report on the OLED collection (the same route as brightness
+    /// `0x85` and return-to-UI `0x95`).
+    pub fn send_oled_command(&self, cmd: u8, args: &[u8]) -> anyhow::Result<()> {
+        let mut report = [0u8; 64];
+        report[0] = self.oled_report_id;
+        report[1] = cmd;
+        for (slot, value) in report[2..].iter_mut().zip(args) {
+            *slot = *value;
+        }
+        self.dev.oled().write(&report)?;
+        Ok(())
+    }
+
+    /// Send a 64-byte command report on the info collection (the same route as the `0x20` /
+    /// `0xb0` queries).
+    pub fn send_info_command(&self, cmd: u8, args: &[u8]) -> anyhow::Result<()> {
+        let mut report = [0u8; 64];
+        report[0] = self.info_report_id;
+        report[1] = cmd;
+        for (slot, value) in report[2..].iter_mut().zip(args) {
+            *slot = *value;
+        }
+        self.dev.info().write(&report)?;
+        Ok(())
+    }
+
+    /// Ask the base station for its UX settings (`0x80`); the answer arrives as
+    /// [`DeviceEvent::UxSettings`]. Read-only.
+    pub fn query_ux_settings(&self) -> anyhow::Result<()> {
+        self.send_info_command(0x80, &[])
+    }
+
+    /// Experimental (`GXOLED_OSD_LAB`): `0x8d` "set Sonar present". The command exists in the
+    /// device's published opcode list; which of the two collections the firmware listens on is
+    /// not documented for this model, so the caller decides and logs the outcome.
+    pub fn set_sonar_present_on(&self, present: bool, oled_collection: bool) -> anyhow::Result<()> {
+        let args = [present as u8];
+        if oled_collection {
+            self.send_oled_command(0x8d, &args)
+        } else {
+            self.send_info_command(0x8d, &args)
+        }
+    }
+
+    /// Experimental (`GXOLED_OSD_LAB`): `0x89` home screen type (0 detailed, 1 simple).
+    pub fn set_home_screen_type_on(&self, value: u8, oled_collection: bool) -> anyhow::Result<()> {
+        let args = [value];
+        if oled_collection {
+            self.send_oled_command(0x89, &args)
+        } else {
+            self.send_info_command(0x89, &args)
+        }
+    }
+
     // `buf[0]` is the incoming report ID. Nova Pro command replies use the info report ID
     // sent with the query, while unsolicited dial events use report ID 7.
     fn parse_event(&self, buf: &[u8; 64]) -> Vec<DeviceEvent> {
@@ -456,5 +545,38 @@ mod tests {
         query_report[3] = 0x20;
         let query_events = parse_event_report(&query_report, 0x06);
         assert!(matches!(query_events.as_slice(), [DeviceEvent::Volume { volume: 0x18 }]));
+    }
+
+    #[test]
+    fn ux_settings_reply_is_decoded_field_by_field() {
+        let mut report = [0u8; 64];
+        report[0] = 0x06;
+        report[1] = 0x80;
+        report[2..8].copy_from_slice(&[1, 8, 3, 0, 1, 1]);
+        let events = parse_event_report(&report, 0x06);
+        assert!(matches!(
+            events.as_slice(),
+            [DeviceEvent::UxSettings {
+                dim_timer: 1,
+                oled_brightness: 8,
+                idle_brightness: 3,
+                home_screen_type: 0,
+                home_screen_mic_mute: 1,
+                sonar_present: 1,
+            }]
+        ));
+    }
+
+    #[test]
+    fn unrecognised_reports_are_preserved_for_diagnostics() {
+        let mut report = [0u8; 64];
+        report[0] = 0x07;
+        report[1] = 0x42;
+        report[2] = 0xaa;
+        let events = parse_event_report(&report, 0x06);
+        match events.as_slice() {
+            [DeviceEvent::Unknown { raw }] => assert_eq!(&raw[..3], &[0x07, 0x42, 0xaa]),
+            other => panic!("unexpected: {other:?}"),
+        }
     }
 }

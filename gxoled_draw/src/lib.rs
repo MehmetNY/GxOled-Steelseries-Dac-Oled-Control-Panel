@@ -2,6 +2,7 @@
 // Heavily specialised for the GxOled CLI and desktop app, and is therefore not recommended for general use.
 
 mod casio;
+mod osd_lab;
 
 use anyhow::{Context, bail};
 use chrono::{Local, Timelike};
@@ -429,11 +430,27 @@ fn run_draw_device_thread(
     // actually sent, so a camera can show which HID write the panel finally displayed. The
     // counter is drawn on a copy: `prev_screen` stays unstamped, so the send cadence
     // (change-or-1Hz heartbeat) is identical to the normal build.
-    let osd_stamp = std::env::var("GXOLED_OSD_STAMP").ok().as_deref() == Some("1");
+    // `GXOLED_OSD_LAB=1` (see `osd_lab`): one experiment per knob turn, stamped on screen.
+    let osd_lab_enabled = std::env::var("GXOLED_OSD_LAB").ok().as_deref() == Some("1");
+    let osd_stamp = osd_lab_enabled || std::env::var("GXOLED_OSD_STAMP").ok().as_deref() == Some("1");
     let mut osd_seq: u32 = 0;
     let mut osd_last_dial: Option<Instant> = None;
-    osd_log(&format!("START hold_ms={} legacy={} pulse={} stamp={} fps={}",
-        osd_hold.as_millis(), osd_legacy, osd_pulse, osd_stamp, fps));
+    let mut lab = osd_lab_enabled.then(|| osd_lab::OsdLab::new(osd_lab::default_steps()));
+    let mut lab_hold = osd_hold;
+    let mut lab_orig_home: Option<u8> = None;
+    let mut lab_sonar_changed = false;
+    let mut lab_home_changed = false;
+    let mut lab_last_ui_cmd: Option<Instant> = None;
+    let mut raw_unknown_logged = 0u32;
+    osd_log(&format!("START hold_ms={} legacy={} pulse={} stamp={} lab={} pid=0x{:04x} fps={}",
+        osd_hold.as_millis(), osd_legacy, osd_pulse, osd_stamp, osd_lab_enabled, dev.product_id(), fps));
+    if osd_lab_enabled {
+        let names: Vec<&str> = osd_lab::default_steps().iter().map(|step| step.label()).collect();
+        osd_log(&format!("LAB_BEGIN steps={names:?}"));
+        // Read-only: shows the device's own dim timer / home screen / Sonar flag at start.
+        osd_log(&format!("LAB_QUERY_UX at=start result={:?}",
+            dev.query_ux_settings().map_err(|e| e.to_string())));
+    }
     let mut osd_trace_remaining_frames = 0u8;
     let mut last_accepted_volume_event: Option<Instant> = None;
     loop {
@@ -470,6 +487,18 @@ fn run_draw_device_thread(
         // Extend the yield period on every volume event, so continuous dial movement
         // keeps the native UI in control until 2.5 seconds after the last event.
         if connected {
+            if let Some(lab) = lab.as_mut() {
+                if let Some((index, pre)) = lab.due_pre(Instant::now(), osd_session_start.elapsed()) {
+                    osd_log(&format!("LAB_PRE_DUE step_index={index} pre={pre:?}"));
+                    lab_run_pre(&dev, pre, lab_orig_home, &osd_log);
+                    match pre {
+                        osd_lab::LabPre::SonarOn => lab_sonar_changed = true,
+                        osd_lab::LabPre::SonarOff => lab_sonar_changed = false,
+                        osd_lab::LabPre::HomeSimple => lab_home_changed = true,
+                        osd_lab::LabPre::HomeRestore => lab_home_changed = false,
+                    }
+                }
+            }
             let read_start = Instant::now();
             let events = dev.get_events().unwrap_or_else(|err| {
                 osd_log(&format!("HID_READ_ERROR {err}"));
@@ -495,6 +524,52 @@ fn run_draw_device_thread(
                         };
                         osd_last_dial = Some(event_time);
                         osd_log(&format!("DIAL level={volume} accepted={arm} since_previous_ms={since_last:?} last_seq={osd_seq}"));
+                        if let Some(lab) = lab.as_mut() {
+                            let outcome = lab.on_dial(event_time);
+                            if outcome.new_group {
+                                lab_hold = outcome.step.hold_override().unwrap_or(osd_hold);
+                                lab_last_ui_cmd = None;
+                                osd_log(&format!("LAB_GROUP group={} step_index={} step={} hold_ms={}",
+                                    outcome.group, outcome.step_index, outcome.step.label(), lab_hold.as_millis()));
+                            }
+                            let rate_ok = lab_last_ui_cmd
+                                .is_none_or(|t| event_time.saturating_duration_since(t) >= Duration::from_millis(300));
+                            if (outcome.new_group && outcome.step.ui_at_group_start())
+                                || (outcome.step.ui_at_every_dial() && rate_ok)
+                            {
+                                let result = dev.return_to_ui().map_err(|e| e.to_string());
+                                lab_last_ui_cmd = Some(event_time);
+                                osd_log(&format!("LAB_UI_CMD when=dial step={} result={result:?}", outcome.step.label()));
+                                if outcome.step.ui_at_every_dial() {
+                                    spin_sleep::sleep(Duration::from_millis(60));
+                                }
+                                // Make the next loop iteration send a frame even if nothing changed.
+                                prev_screen = Bitmap::new(0, 0, false);
+                            }
+                        }
+                    }
+                    DeviceEvent::UxSettings {
+                        dim_timer,
+                        oled_brightness,
+                        idle_brightness,
+                        home_screen_type,
+                        home_screen_mic_mute,
+                        sonar_present,
+                    } => {
+                        osd_log(&format!("UX_SETTINGS dim_timer={dim_timer} oled_brightness={oled_brightness} \
+idle_brightness={idle_brightness} home_screen_type={home_screen_type} mic_mute={home_screen_mic_mute} \
+sonar_present={sonar_present}"));
+                        if lab.is_some() {
+                            lab_orig_home.get_or_insert(*home_screen_type);
+                        }
+                        continue;
+                    }
+                    DeviceEvent::Unknown { raw } => {
+                        if osd_trace_file.is_some() && raw_unknown_logged < 300 {
+                            raw_unknown_logged += 1;
+                            osd_log(&format!("RAW_UNKNOWN {raw:02x?}"));
+                        }
+                        continue;
                     }
                     DeviceEvent::Volume { volume } if osd_legacy => {
                         // 2026-10-18 working behavior: old parser combined unsolicited and
@@ -510,11 +585,11 @@ fn run_draw_device_thread(
                 if arm {
                     last_accepted_volume_event = Some(event_time);
                     volume_osd_started.get_or_insert(event_time);
-                    volume_osd_until = Some(event_time + osd_hold);
+                    volume_osd_until = Some(event_time + lab_hold);
                     osd_trace_remaining_frames = 3;
                     osd_log(&format!("HOLD_ARM duration_ms={} until_ms={}",
-                        osd_hold.as_millis(),
-                        event_time.duration_since(osd_session_start).as_millis() + osd_hold.as_millis()));
+                        lab_hold.as_millis(),
+                        event_time.duration_since(osd_session_start).as_millis() + lab_hold.as_millis()));
                 }
                 event_sender.send(DrawEvent::DeviceEvent(event)).unwrap();
             }
@@ -525,6 +600,14 @@ fn run_draw_device_thread(
             if let Some(suppression_started) = volume_osd_started.take() {
                 osd_log(&format!("HOLD_END elapsed_ms={}",
                     Instant::now().saturating_duration_since(suppression_started).as_millis()));
+                if let Some(step) = lab.as_ref().and_then(|l| l.current_step()) {
+                    if step.ui_at_hold_end() {
+                        let result = dev.return_to_ui().map_err(|e| e.to_string());
+                        osd_log(&format!("LAB_UI_CMD when=hold-end step={} result={result:?}", step.label()));
+                        spin_sleep::sleep(Duration::from_millis(40));
+                        prev_screen = Bitmap::new(0, 0, false);
+                    }
+                }
                 // Shift animation deadlines by the exact time yielded to the firmware. Without
                 // this, GIF playback would rush through the frames that elapsed during the OSD.
                 let paused_for = Instant::now().saturating_duration_since(suppression_started);
@@ -667,7 +750,12 @@ fn run_draw_device_thread(
                 let to_send: &Bitmap = if osd_stamp {
                     osd_seq = osd_seq.wrapping_add(1);
                     let mut copy = screen.crop(0, 0, screen.w, screen.h);
-                    stamp_sequence(&mut copy, osd_seq);
+                    // Lab mode: leading digit = experiment step, remaining three = frame counter.
+                    let stamp_value = match lab.as_ref() {
+                        Some(l) => l.stamp_digit(frame_time) * 1000 + osd_seq % 1000,
+                        None => osd_seq,
+                    };
+                    stamp_sequence(&mut copy, stamp_value);
                     stamped = copy;
                     &stamped
                 } else {
@@ -692,7 +780,8 @@ fn run_draw_device_thread(
                         if let Some(dial) = osd_last_dial {
                             let since_dial = frame_time.saturating_duration_since(dial);
                             if since_dial < Duration::from_secs(10) {
-                                osd_log(&format!("FRAME seq={osd_seq} since_dial_ms={} write_ms={} pulse={}",
+                                let step = lab.as_ref().and_then(|l| l.current_step()).map_or("-", |s| s.label());
+                                osd_log(&format!("FRAME seq={osd_seq} since_dial_ms={} write_ms={} pulse={} step={step}",
                                     since_dial.as_millis(), draw_start.elapsed().as_millis(), recent_dial_pulse));
                             }
                         }
@@ -713,7 +802,48 @@ fn run_draw_device_thread(
         // println!("frame: {:?}, {:?}", frame_duration, frame_delay);
         spin_sleep::sleep(frame_delay.saturating_sub(frame_duration));
     }
+    if lab.is_some() {
+        // Leave the base station the way it was found, even if the cycle was cut short.
+        if lab_sonar_changed {
+            lab_run_pre(&dev, osd_lab::LabPre::SonarOff, lab_orig_home, &osd_log);
+        }
+        if lab_home_changed {
+            lab_run_pre(&dev, osd_lab::LabPre::HomeRestore, lab_orig_home, &osd_log);
+        }
+        osd_log("LAB_END");
+    }
     dev
+}
+
+/// Device side of an [`osd_lab::LabPre`]. Commands go to both HID collections because it is not
+/// documented which one the firmware listens on for settings; each outcome is logged, and a
+/// follow-up `0x80` query records what the device reports afterwards.
+fn lab_run_pre(dev: &Device, pre: osd_lab::LabPre, orig_home: Option<u8>, log: &dyn Fn(&str)) {
+    use osd_lab::LabPre;
+    match pre {
+        LabPre::SonarOn | LabPre::SonarOff => {
+            let on = pre == LabPre::SonarOn;
+            for (name, oled) in [("info", false), ("oled", true)] {
+                let result = dev.set_sonar_present_on(on, oled).map_err(|e| e.to_string());
+                log(&format!("LAB_PRE sonar_present={on} collection={name} result={result:?}"));
+            }
+        }
+        LabPre::HomeSimple | LabPre::HomeRestore => {
+            let target = if pre == LabPre::HomeSimple { Some(1) } else { orig_home };
+            match target {
+                Some(value) => {
+                    for (name, oled) in [("info", false), ("oled", true)] {
+                        let result = dev.set_home_screen_type_on(value, oled).map_err(|e| e.to_string());
+                        log(&format!("LAB_PRE home_screen_type={value} collection={name} result={result:?}"));
+                    }
+                }
+                None => log("LAB_PRE skipped: the device never reported its original home screen type"),
+            }
+        }
+    }
+    spin_sleep::sleep(Duration::from_millis(150));
+    let result = dev.query_ux_settings().map_err(|e| e.to_string());
+    log(&format!("LAB_QUERY_UX at=after-{pre:?} result={result:?}"));
 }
 
 fn thicken_bitmap(bitmap: &Bitmap) -> Bitmap {

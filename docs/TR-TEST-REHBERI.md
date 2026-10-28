@@ -21,40 +21,39 @@ Hazır paket, kaynak kodun yanında GitHub'da **ön-sürüm (pre-release)** olar
 
 `ZIP → sağ tık → Tümünü ayıkla...` → hedef olarak **`C:\gx-test`** yaz. ZIP'in içinden doğrudan çalıştırma.
 
-İçinde şunlar olmalı: `gxoled.exe`, `Test-VolumeOSD.ps1`, `1-STAMP-varsayilan.cmd`, `2-STAMP-bekleme-yok.cmd`,
-`3-Loglari-ac.cmd`, `BUILD-INFO.txt`, `BASLA-BURADAN.txt`.
+İçinde şunlar olmalı: `gxoled.exe`, `Test-VolumeOSD.ps1`, `1-OTOMATIK-TEST.cmd`, `2-Loglari-ac.cmd`,
+`BUILD-INFO.txt`, `BASLA-BURADAN.txt`.
 
-## 3. Testi yap
+## 3. Testi yap (otomatik, tek çift tık)
 
-Tüm ayrıntılı adımlar (kamera kurulumu, kaç tekrar, ne not edilecek) paketin içindeki
-**`BASLA-BURADAN.txt`** dosyasındadır; aynı metin bu depoda
-[`../scripts/diagnostics-package/BASLA-BURADAN.txt`](../scripts/diagnostics-package/BASLA-BURADAN.txt) olarak durur.
-Özeti:
+Ayrıntılı adımlar paketin içindeki **`BASLA-BURADAN.txt`** dosyasındadır (kopyası:
+[`../scripts/diagnostics-package/BASLA-BURADAN.txt`](../scripts/diagnostics-package/BASLA-BURADAN.txt)). Özet:
 
-1. Çalışan GxOled'i tepsiden kapat (sağ tık → Çıkış/Quit). Görev Yöneticisi → Ayrıntılar'da `gxoled.exe`/`ggoled.exe` kalmamalı.
-2. Telefonu OLED'e sabitle, **en az 60 fps** (mümkünse 120/240 fps yavaş çekim) kayda başla.
-3. `1-STAMP-varsayilan.cmd` dosyasına çift tıkla. Düğmeyi birkaç tık çevir, DOKUNMA, saat dönene kadar bekle, o anda köşedeki 4 haneli numarayı not et. **En az 5 tekrar.**
-4. Tepsiden "Çıkış" ile kapat.
-5. `2-STAMP-bekleme-yok.cmd` ile aynısını yap.
-6. `3-Loglari-ac.cmd` ile log klasörünü aç; en yeni iki `osd-*-stamp-*.log` dosyasını ve numara notlarını bana gönder.
+1. Çalışan GxOled'i tepsiden kapat.
+2. Telefonla OLED'i 1080p 60 fps **tek video** olarak kaydetmeye başla.
+3. `1-OTOMATIK-TEST.cmd` dosyasına çift tıkla.
+4. Saat ekrandayken 5 sn bekle, düğmeyi tek seferde 3-5 tık çevir, elini çek, saat dönene kadar bekle. **En az 10 kez** tekrarla; sağ alttaki sayının ilk hanesi deney numarasıdır ve kendiliğinden artar.
+5. Tepsiden "Çıkış" de (cihaz ayarları otomatik eski haline döner), videoyu durdur.
+6. Videoyu ve en yeni `osd-default-lab-*.log` dosyasını (`2-Loglari-ac.cmd` klasörü açar) gönder.
 
-## 4. Sonuç ne anlama gelir?
+Sonuçları video + log'dan ben otomatik okuyorum; numara not etmen gerekmiyor.
 
-| Gözlem | Anlamı (hipotez) |
+## 4. Önceki ölçümün sonucu (28 Ekim 2026, 1080p 60 fps videolar)
+
+| Bulgu | Kanıt |
 | --- | --- |
-| Saat dönünce görünen numara, ~2,5 sn'de gönderilen ilk karenin numarası | Kare cihaza ulaşmış, cihaz kendi göstergesi bitene kadar tutup sonra göstermiş (**geç gösterim**). |
-| Numara, o ilk kareden birkaç adım büyük | Aradaki kareler cihaz tarafından **atılmış**; cihaz yalnızca göstergesi bittikten sonra gelen kareyi kabul ediyor. |
-| İki tur arasında fark var | Gönderim zamanlamasının etkisi var; bu da ayrıca bilgidir. |
-
-Bunlar yorumlama kurallarıdır; kesin hüküm ölçüm sonuçları gelince verilir.
+| Cihaz, ses göstergesi sürerken gönderilen kareleri **atıyor** (gecikmeli göstermiyor) | Ekrana ilk gelen kare, hep göstergenin bittiği andan sonra yazılan ilk kare; aradaki numaralı kareler hiç görünmüyor. |
+| Gösterge, bir kare yazıldığı anda kapanıyor | Üç varsayılan kayıtta "ilk görünen kare → videoda gösterge kapanışı" gecikmesi 2,157-2,160 sn ile sabit. |
+| Kilit süresi ≈ 5-6 sn ve yazılım zamanlamasından bağımsız | Bekleme-yok modu ve varsayılan mod aynı sonucu veriyor. |
 
 ## 5. Neden programı baştan yazmak 6 sn'yi kendiliğinden çözmez?
 
 Ölçümler şunu gösterdi: 18 Ekim'de fiziksel olarak iyi çalıştığı bildirilen eski EXE, aynı cihaz
 üzerinde bugün de ~6 sn veriyor ve kaynak kodu karşılaştırınca **HID gönderim yöntemi birebir aynı**
-(iki 64 sütunluk 1024 baytlık feature report, komut 0x93). Yani sıfırdan yazılan bir sürüm de aynı
-cihaza aynı komutları gönderecekse, aynı gecikmeyi görme olasılığı yüksektir. Önce gecikmenin
-yazılımda mı, cihazda mı oluştuğunu bu ölçümle ayırıyoruz; çözüm bu kanıta göre yazılacak.
+(iki 64 sütunluk 1024 baytlık feature report, komut 0x93). Yani sıfırdan yazılan bir sürüm de aynı cihaza aynı komutları gönderecekse aynı gecikmeyi görür.
+Videolu ölçüm bunu doğruladı: gecikme yazılımda değil, cihazın kendi ana ekranının kareleri
+~5-6 sn boyunca yok saymasında. Bu yüzden çözüm, cihazın kilidini açabilecek komutları aramaktır
+(yukarıdaki otomatik deney döngüsü); kodu yeniden yazmak bunu değiştirmez.
 
 ## 6. Dokunulmayanlar
 

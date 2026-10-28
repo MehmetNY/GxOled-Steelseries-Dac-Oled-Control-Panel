@@ -157,7 +157,7 @@ jobs:
           sha256sum "${PKG}.zip" > "${PKG}.zip.sha256"
           echo "PKG=${PKG}" >> "$GITHUB_ENV"
           unzip -l "${PKG}.zip"
-          for f in 1-STAMP-varsayilan.cmd 2-STAMP-bekleme-yok.cmd 3-Loglari-ac.cmd; do
+          for f in 1-OTOMATIK-TEST.cmd 2-Loglari-ac.cmd; do
             unzip -p "${PKG}.zip" "$f" | head -c 4000 | grep -q $'\r' || { echo "::error::$f lost its CRLF line endings"; exit 1; }
           done
       - name: Keep the package as a workflow artifact too
@@ -176,11 +176,11 @@ jobs:
           cat > notes.md <<'EOF'
           **Bu bir ürün sürümü DEĞİL, bir ölçüm paketidir.** v0.5.1 / v0.5.0 / stable etkilenmez.
 
-          Amaç: DAC ses düğmesinden sonra GxOled'in ~6 sn geç dönmesinin nerede oluştuğunu kanıtlamak
-          (kareler cihaz tarafından atılıyor mu, yoksa geç mi gösteriliyor?).
+          Amaç: DAC ses düğmesinden sonra GxOled'in ~6 sn geç dönmesini aşabilecek cihaz komutlarını otomatik denemek
+          (video ölçümü: cihaz bu süre boyunca gönderilen kareleri atıyor).
 
           **Nasıl kullanılır:** ZIP'i `C:\gx-test` gibi kısa bir klasöre çıkar, içindeki
-          `BASLA-BURADAN.txt` dosyasını oku ve `1-STAMP-varsayilan.cmd` dosyasına çift tıkla.
+          `BASLA-BURADAN.txt` dosyasını oku ve `1-OTOMATIK-TEST.cmd` dosyasına çift tıkla.
 
           Derleme yalnızca CI ile doğrulandı; DAC üzerinde fiziksel doğrulama yapılmadı.
           Kaynak commit ve EXE SHA-256 değeri ZIP içindeki `BUILD-INFO.txt` dosyasında yazar.

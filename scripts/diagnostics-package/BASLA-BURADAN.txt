@@ -1,171 +1,90 @@
-GxOled — SES (VOLUME) OSD ÖLÇÜM PAKETİ
-======================================
+GxOled — SES (VOLUME) OSD OTOMATİK DENEY PAKETİ
+===============================================
 
-BU PAKET NEDİR, NE DEĞİLDİR?
-----------------------------
-* Bu bir ÖLÇÜM paketidir. 6 saniyelik gecikmeyi düzeltmiş olduğunu İDDİA ETMEZ.
-* Amaç tek bir soruyu cevaplamak:
-    "DAC düğmesi çevrilince, GxOled'in gönderdiği kareler cihaz tarafından
-     ATILIYOR mu, yoksa cihaz o kareyi alıp GEÇ mi gösteriyor?"
-* Bunu anlamak için her gönderilen kareye 4 haneli bir numara (damga) basılır.
-  OLED'in sağ alt köşesinde küçük beyaz bir kutuda görünür. Kamera ile hangi
-  numaranın ekrana ilk geldiğini görürsek, log dosyasındaki gönderim zamanıyla
-  karşılaştırıp gecikmenin NEREDE oluştuğunu kanıtlayabiliriz.
-* Paketteki gxoled.exe'nin hangi kaynak koddan (commit) derlendiği
-  BUILD-INFO.txt dosyasında yazar. Derlemenin başarılı olması cihazda doğru
-  çalıştığı anlamına gelmez; asıl doğrulama senin fiziksel testindir.
-* Mevcut v0.5.1 / v0.5.0 / stable sürümlerine DOKUNMAZ. Kurulum yapmaz.
-  Test sırasında Ayarlar penceresinde hiçbir şeyi değiştirme.
+NE İŞE YARAR?
+-------------
+Önceki ölçümler (senin videoların + loglar) şunu kanıtladı:
+  * DAC düğmesi çevrilince cihaz kendi ana ekranını açıyor ve yaklaşık 5-6 saniye
+    boyunca GxOled'in gönderdiği TÜM kareleri yok sayıyor (kareler gecikmeli
+    gösterilmiyor, tamamen atılıyor).
+  * Yazılımdaki zamanlamayla bunu kısaltmak mümkün değil; cihazın kilidini
+    açabilecek komutlar gerekiyor.
+Bu paket, bu komutları SIRAYLA ve OTOMATİK dener. Sen sadece düğmeyi çevirirsin.
+Her çevirişte listedeki bir sonraki deney çalışır; sonucu videodan ben okurum.
+
+BU PAKET SORUNU ÇÖZDÜĞÜNÜ İDDİA ETMEZ. Hangi deneyin işe yaradığını bulur.
+Mevcut v0.5.1 / v0.5.0 / stable sürümlerine dokunmaz.
 
 
-PAKETİN İÇİNDEKİLER
--------------------
-  gxoled.exe                 : ölçüm özellikli GxOled (damga desteği içerir)
-  Test-VolumeOSD.ps1         : testi başlatan PowerShell betiği (elleme)
-  1-STAMP-varsayilan.cmd     : TUR 1 — normal davranış (2,5 sn bekleme) + damga
-  2-STAMP-bekleme-yok.cmd    : TUR 2 — bekleme yok (ölçüm modu) + damga
-  3-Loglari-ac.cmd           : kayıt (log) klasörünü Gezgin'de açar
-  BUILD-INFO.txt             : bu EXE'nin kaynak commit'i ve derleme numarası
-  BASLA-BURADAN.txt          : bu rehber
+PAKETİN İÇİ
+-----------
+  gxoled.exe            : deney özellikli GxOled
+  Test-VolumeOSD.ps1    : testi başlatan betik (elleme)
+  1-OTOMATIK-TEST.cmd   : TEK ÇİFT TIK — otomatik deney döngüsü
+  2-Loglari-ac.cmd      : kayıt (log) klasörünü açar
+  BUILD-INFO.txt        : EXE'nin kaynak commit'i ve SHA-256 değeri
+  BASLA-BURADAN.txt     : bu rehber
 
 
-ADIM 1 — ZIP'İ KISA BİR KLASÖRE ÇIKAR
--------------------------------------
-Önemli: ZIP'in İÇİNDEN çalıştırma. Önce dışarı çıkar.
-  1. İndirdiğin ZIP'e sağ tıkla -> "Tümünü ayıkla..." (Extract All).
-  2. Hedef klasör olarak KISA bir yol yaz:   C:\gx-test
-  3. "Ayıkla"ya bas. C:\gx-test içinde yukarıdaki dosyaları görmelisin.
-(Neden kısa? Windows 260 karakterlik yol sınırı bazı araçlarda sorun çıkarır.)
-
-
-ADIM 2 — ÇALIŞAN GxOled'İ KAPAT
+YAPACAKLARIN (toplam ~5 dakika)
 -------------------------------
-Test, başka bir GxOled/ggoled çalışırken BAŞLAMAZ (iki program aynı OLED'e
-yazarsa ölçüm bozulur). Bu bilinçli bir korumadır.
-  1. Saatin yanındaki ^ okuna bas (gizli simgeler).
-  2. GxOled simgesine SAĞ tıkla -> "Çıkış" (Quit).
-  3. Doğrulamak için Ctrl+Shift+Esc -> Görev Yöneticisi -> "Ayrıntılar"
-     sekmesi. Listede gxoled.exe veya ggoled.exe OLMAMALI.
-  4. SteelSeries GG / Sonar kurulu değil dedin; yine de çalışmadığından emin ol.
+1) ZIP'i kısa bir klasöre çıkar: sağ tık -> "Tümünü ayıkla" -> C:\gx-test
+   (ZIP'in içinden çalıştırma.)
+
+2) Çalışan GxOled varsa kapat: tepsideki GxOled simgesine sağ tık -> "Çıkış".
+   (Görev Yöneticisi -> Ayrıntılar'da gxoled.exe / ggoled.exe kalmamalı.)
+
+3) Telefonu OLED'e sabitle, 1080p 60 fps VİDEOYU BAŞLAT. Tek video yeter,
+   test boyunca kesintisiz çek. Sağ alt köşedeki sayı okunabilsin.
+   Müzik/video çalmasın (medya kapalı).
+
+4) C:\gx-test içinde  1-OTOMATIK-TEST.cmd  dosyasına çift tıkla.
+   SmartScreen çıkarsa "Ek bilgi" -> "Yine de çalıştır".
+
+5) OLED'de saat görünür; sağ alt köşede 4 haneli bir sayı vardır:
+       X YYY   X = sıradaki deney numarası (0-9), YYY = kare sayacı.
+   Saat ekranda iken 5 saniye bekle, sonra DAC düğmesini TEK SEFERDE 3-5 tık çevir,
+   elini çek ve düğmeye dokunma. Orijinal ekran gelir; saat geri dönene kadar bekle.
+
+6) Aynı şeyi (5. adım) EN AZ 10 KEZ tekrarla. Her seferinde deney numarası
+   (sayının ilk hanesi) kendiliğinden artar: 0,1,2,...,9. İstersen 20 kez yap
+   (ikinci tur tekrarlanabilirliği gösterir).
+   Saat geri geldikten sonra en az 5 sn beklemeyi unutma.
+
+7) Bitince tepsi simgesine sağ tık -> "Çıkış". Cihaz ayarları otomatik eski
+   haline getirilir. Videoyu durdur.
+
+8) Bana gönder:
+     a) videoyu (olduğu gibi),
+     b) 2-Loglari-ac.cmd ile açılan klasördeki EN YENİ  osd-default-lab-*.log
+        dosyasını.
 
 
-ADIM 3 — KAMERAYI HAZIRLA
--------------------------
-  * Telefonu sabitle (tripod/kitap desteği). OLED ekran kadrajı doldursun,
-    sağ alt köşedeki numarayı net okuyabilmelisin (15-25 cm mesafe).
-  * Kayıt hızı en az 60 fps. Telefonda "yavaş çekim" 120 veya 240 fps
-    varsa onu kullan: ne kadar çok kare, o kadar kesin sonuç.
-  * Düğmeyi çeviren elin de görünsün YA DA düğmeyi çevirdiğin an OLED'deki
-    yerel ses göstergesinin (orijinal arayüz) belirmesi videoda net olsun.
-    Gecikmeyi "yerel gösterge belirdi" -> "GxOled saati geri geldi" arası
-    olarak ölçeceğiz. PC saati ile video saatini eşitlemeye gerek yok.
-  * Ortam ışığı ekrana yansımasın.
-  * Müzik/video: İLK İKİ TURDA medya kapalı olsun (Spotify, YouTube, tarayıcıda
-    oynayan her şey durdurulmuş veya kapalı).
+DENEYLER (merak edersen) — hepsi cihazın kendi protokolündeki komutlardır
+-------------------------------------------------------------------------
+  0 base                  normal davranış (kontrol ölçümü)
+  1 ui-at-dial            düğmeyle birlikte "SteelSeries arayüzüne dön" (0x95)
+  2 ui-at-end             2,5 sn bekleme bitince 0x95
+  3 ui-then-frames        her dönüşte 0x95, hemen ardından kareler (bekleme yok)
+  4 sonar-on              cihaza "Sonar mevcut" bayrağı (0x8d=1)
+  5 sonar-on+base         bayrak açıkken normal davranış
+  6 sonar-on+ui-at-end    bayrak açıkken 0x95
+  7 sonar-off             bayrağı kapat (0x8d=0)
+  8 home-simple           ana ekran tipi "basit" (0x89=1)
+  9 home-restore          ana ekran tipini eski haline getir
 
-
-ADIM 4 — TUR 1 (NORMAL DAVRANIŞ)
---------------------------------
-  1. C:\gx-test içinde  1-STAMP-varsayilan.cmd  dosyasına ÇİFT TIKLA.
-  2. Siyah bir pencere açılır ve GxOled başlar. Windows "bilinmeyen yayıncı"
-     / SmartScreen uyarısı çıkarsa: "Ek bilgi" -> "Yine de çalıştır".
-     (EXE imzasız; bu normaldir.) Betik dosyaları zaten "engeli kaldır"
-     işleminden geçirilir.
-  3. OLED'de GxOled saati görünene kadar bekle. Sağ alt köşede küçük bir
-     4 haneli numara göreceksin; saniyede bir artması NORMALDİR (damga budur).
-  4. Kamerayı KAYDA başlat.
-  5. DAC düğmesini TEK SEFERDE birkaç tık çevir (ör. 3-5 tık), sonra elini
-     çek ve DÜĞMEYE DOKUNMA.
-  6. OLED'de GxOled saati geri gelene kadar bekle. Geri geldiği anda köşedeki
-     numarayı not et (video durdurup ileri-geri oynatarak da okuyabilirsin).
-  7. Bir sonraki tekrar için EN AZ 15 saniye bekle (eski olay tamamen bitsin).
-  8. Bunu EN AZ 5 KEZ tekrarla. (Aynı videoda hepsi olabilir.)
-  9. Bitirince: tepsi simgesi -> "Çıkış" (Quit). Siyah pencerede son log
-     satırları görünür, sonra "Devam etmek için bir tuşa basın" çıkar; bir
-     tuşa bas.
-
-Not: Düğmeyi çevirirken ekranda önce ORİJİNAL ses göstergesi belirir; bu
-doğrudur. Biz o gösterge kaybolup saatin geri geldiği anı ölçüyoruz.
-
-
-ADIM 5 — TUR 2 (BEKLEME YOK — ölçüm modu)
------------------------------------------
-  Bu mod kullanıcı için bir özellik DEĞİLDİR; sadece "cihaz kareleri atıyor mu"
-  sorusuna ek veri verir. GxOled bu modda ~200 ms sonra kare göndermeye
-  başlar; yerel gösterge ile çizim kısa süre iç içe girebilir (anlık
-  bozulma/parlama görürsen not et, bu da veridir).
-  Adım 4'ün AYNISINI  2-STAMP-bekleme-yok.cmd  ile yap (en az 5 tekrar).
-
-
-ADIM 6 — NE GÖNDERECEKSİN?
---------------------------
-  A) LOG DOSYALARI
-     1. 3-Loglari-ac.cmd dosyasına çift tıkla; klasör açılır
-        (C:\Users\<sen>\AppData\Local\Temp\GxOled-OSD-Diagnostics).
-     2. En yeni iki dosyayı bul:
-          osd-default-stamp-<tarih-saat>.log
-          osd-no-hold-stamp-<tarih-saat>.log
-     3. Not Defteri ile aç, hepsini seç (Ctrl+A), kopyala (Ctrl+C) ve sohbete
-        yapıştır; ya da dosyayı sohbete ekle.
-  B) TEKRAR NOTLARI (her tur için ayrı, ör. böyle bir liste):
-        Tur 1, tekrar 1: saat geri gelince numara = 0123, yaklaşık süre = 6 sn
-        Tur 1, tekrar 2: numara = 0131, süre = 6 sn
-        ...
-     Süre elinde yoksa sadece numaraları yaz; yeter.
-  C) VİDEO (isteğe bağlı): kısa klipler veya tek video. Büyükse sıkıştırıp
-     paylaş. Video yoksa numara notları yine de çok değerlidir.
-
-
-ADIM 7 — SONUÇ NASIL OKUNUR? (merak edersen)
---------------------------------------------
-Log satırlarında önemli olanlar:
-  DIAL ...        : DAC'tan gelen ses-düğmesi olayı alındı
-  HOLD_ARM        : GxOled "2,5 sn çizme, cihaza bırak" bekleme süresini başlattı
-  HOLD_END        : o bekleme bitti (sadece yazılım zamanlayıcısı, cihaz kanıtı DEĞİL)
-  FRAME seq=N since_dial_ms=T write_ms=W : N numaralı kare, düğme olayından
-                    T ms sonra gönderildi; sürücü W ms'de "tamam" döndü.
-                    ("tamam" = Windows'a teslim edildi; paneli gösterdi demek DEĞİL.)
-
-Karşılaştırma:
-  * Saat geri geldiğinde köşedeki numara, T ≈ 2500 ms civarında gönderilen İLK
-    kareninki ise  -> cihaz o kareyi aldı ama kendi göstergesi bitene kadar
-    BEKLETTİ (geç gösterim). Yazılım zamanında göndermiş; bir sonraki adım
-    cihaz tarafında "ne zaman gösterilir" kuralını anlamaya yönelir.
-  * Numara bu ilk kareden BELİRGİN ŞEKİLDE büyükse (ör. 3-4 fazla)  -> aradaki
-    kareler cihaz tarafından ATILMIŞ. Cihaz, yerel gösterge sürerken gelen
-    kareleri yok sayıyor ve ancak göstergesi bittikten sonra gelen kareyi
-    kabul ediyor. O durumda çözüm "kareleri ne zaman/nasıl göndereceğiz"
-    ekseninde aranır.
-  * Her iki turda da aynı örüntü çıkarsa sonuç sağlam; farklıysa o fark
-    bizim için ayrıca bilgidir.
-Bu yorumlar hipotezdir; ölçüm sonucu gelmeden kesin hüküm vermiyorum.
-
-
-İSTEĞE BAĞLI TUR 3 — MEDYA AÇIKKEN
-----------------------------------
-Önceki denemelerde medya açıkken bazen 3-4 sn görmüştün. Merak edilen: uzun
-başlıklı parça (ekranda kayan yazı) daha sık kare gönderdiği için mi erken
-dönüyor? Bunu ayırmak için, ilk iki tur bittikten sonra:
-  a) Kısa başlıklı bir parça çal (ör. başlığı 6-8 harf, kaymayan) ve
-     1-STAMP-varsayilan.cmd ile 5 tekrar yap.
-  b) Uzun başlıklı bir parça çal (kayan yazı çıkaran) ve yine 5 tekrar yap.
-  Her ikisinde de numara notlarını ve logları gönder.
+NOT 1: "sonar-on" deneyleri sırasında DAC düğmesi Windows ses seviyesini geçici
+olarak farklı davranabilir; döngü 7. deneyde bayrağı kapatır, çıkışta da
+yazılım her şeyi eski haline getirir. Bir şey takılı kalırsa DAC'ın USB ve güç
+kablosunu 30 saniye çek-tak: ayarlar eski haline döner.
+NOT 2: Başlangıçta cihazdan ayarları (ekran zaman aşımı, parlaklık, ana ekran
+tipi, Sonar bayrağı) OKUYORUZ; log'da UX_SETTINGS satırı olarak görünür.
 
 
 SORUN GİDERME
 -------------
-* "Another GxOled/ggoled instance is running" yazısı:
-    Tepsiden GxOled'e sağ tık -> Çıkış. Görev Yöneticisi'nde (Ayrıntılar)
-    gxoled.exe/ggoled.exe kalmadığını doğrula, tekrar çalıştır.
-* "Dosya bulunamadı: gxoled.exe": ZIP'i tam ayıklamadın veya EXE'yi
-  antivirüs karantinaya aldı. Karantinayı kontrol et; EXE'yi geri yükle.
-* SmartScreen "Windows bilgisayarınızı korudu":
-    "Ek bilgi" -> "Yine de çalıştır".
-* PowerShell "betiklerin çalışması devre dışı" hatası: .cmd dosyalarını
-  kullandığın sürece bu çıkmamalı (içlerinde -ExecutionPolicy Bypass var).
-  Çıkarsa pencerenin görüntüsünü bana gönder.
-* OLED'de hiçbir şey görünmüyor: DAC bağlı ve açık olmalı. Başka bir uygulama
-  OLED'i kullanıyor olabilir; Görev Yöneticisi'nde SteelSeries/Sonar var mı bak.
-* Köşede numara görünmüyor: yanlış EXE çalışıyor olabilir. C:\gx-test
-  içindeki gxoled.exe'yi ve BUILD-INFO.txt'yi kontrol et; eski bir pakette
-  damga özelliği yoktur.
+* "Another GxOled/ggoled instance is running": tepsiden GxOled'e sağ tık -> Çıkış.
+* gxoled.exe bulunamadı: ZIP'i tam ayıklamadın veya antivirüs karantinaya aldı.
+* Köşede sayı yok: yanlış/eski EXE çalışıyor; BUILD-INFO.txt'yi kontrol et.
+* Düğme çevrilince hiçbir şey olmuyor / ses seviyesi değişmiyor: bir deney
+  bayrağı takılmış olabilir; ADIM 7'deki gibi çıkış yap, olmazsa çek-tak.
