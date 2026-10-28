@@ -52,6 +52,9 @@ pub enum DeviceEvent {
         home_screen_mic_mute: u8,
         /// Whether the base station believes SteelSeries Sonar is present (`0x8d`).
         sonar_present: u8,
+        /// First 16 bytes of the reply (report ID included), so a different firmware's layout can
+        /// be checked from a log.
+        raw: [u8; 16],
     },
     /// A report that the application does not interpret. Only produced so diagnostics can
     /// log it; the draw thread never forwards it to the UI.
@@ -94,14 +97,19 @@ fn parse_event_report(buf: &[u8; 64], info_report_id: u8) -> Vec<DeviceEvent> {
         }],
 
         // UX settings reply (dim timer, brightness, home screen type, Sonar flag).
-        (id, 0x80) if id == info_report_id => vec![DeviceEvent::UxSettings {
-            dim_timer: buf[2],
-            oled_brightness: buf[3],
-            idle_brightness: buf[4],
-            home_screen_type: buf[5],
-            home_screen_mic_mute: buf[6],
-            sonar_present: buf[7],
-        }],
+        (id, 0x80) if id == info_report_id => {
+            let mut raw = [0u8; 16];
+            raw.copy_from_slice(&buf[..16]);
+            vec![DeviceEvent::UxSettings {
+                dim_timer: buf[2],
+                oled_brightness: buf[3],
+                idle_brightness: buf[4],
+                home_screen_type: buf[5],
+                home_screen_mic_mute: buf[6],
+                sonar_present: buf[7],
+                raw,
+            }]
+        }
 
         // General device state query response.
         (id, 0xb0) if id == info_report_id => vec![
@@ -563,6 +571,7 @@ mod tests {
                 home_screen_type: 0,
                 home_screen_mic_mute: 1,
                 sonar_present: 1,
+                ..
             }]
         ));
     }

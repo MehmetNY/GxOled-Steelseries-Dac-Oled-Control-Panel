@@ -555,10 +555,11 @@ fn run_draw_device_thread(
                         home_screen_type,
                         home_screen_mic_mute,
                         sonar_present,
+                        raw,
                     } => {
                         osd_log(&format!("UX_SETTINGS dim_timer={dim_timer} oled_brightness={oled_brightness} \
 idle_brightness={idle_brightness} home_screen_type={home_screen_type} mic_mute={home_screen_mic_mute} \
-sonar_present={sonar_present}"));
+sonar_present={sonar_present} raw={raw:02x?}"));
                         if lab.is_some() {
                             lab_orig_home.get_or_insert(*home_screen_type);
                         }
@@ -734,9 +735,12 @@ sonar_present={sonar_present}"));
             let frame_time = Instant::now();
             // Diagnostic pulse: 10 Hz for a bounded seven-second period after
             // physical knob movement; outside that period, keep 1 Hz heartbeat.
-            let recent_dial_pulse = osd_pulse && last_accepted_volume_event.is_some_and(|last| {
-                frame_time.saturating_duration_since(last) < Duration::from_secs(7)
-            });
+            // The lab also pulses (10 Hz for 8 s after a dial report): it makes the moment the
+            // native screen lets go measurable to ~0.1 s instead of the 1 s heartbeat.
+            let recent_dial_pulse = (osd_pulse || osd_lab_enabled)
+                && last_accepted_volume_event.is_some_and(|last| {
+                    frame_time.saturating_duration_since(last) < Duration::from_secs(if osd_lab_enabled { 8 } else { 7 })
+                });
             let heartbeat = if recent_dial_pulse {
                 Duration::from_millis(100)
             } else {

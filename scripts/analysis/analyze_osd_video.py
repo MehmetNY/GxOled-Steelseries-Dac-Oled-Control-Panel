@@ -198,7 +198,7 @@ def main():
     for i in range(pairs):
         a, b = eps[i]
         end_log = b - offset
-        later = [(t, seq, step) for t, seq, step in log_frames if t >= end_log - 0.3]
+        later = [(t, seq, step) for t, seq, step in log_frames if t >= end_log - 0.15]
         ending = later[0] if later else None
         label = "-"
         for t, s in groups:
