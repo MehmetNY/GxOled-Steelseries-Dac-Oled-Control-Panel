@@ -106,6 +106,94 @@ jobs:
           name: GxOled-x86_64.flatpak
           path: flatpak/GxOled-x86_64.flatpak
 
+  # Diagnostic measurement package for the volume-OSD handoff investigation.
+  # It runs ONLY for pushes to the diagnostics branch and publishes a GitHub *pre-release* whose tag
+  # does NOT start with "v" (the real release job above is keyed on v* tags and is never triggered
+  # from here). It never touches v0.5.1, v0.5.0, stable or main. The ZIP is a measurement tool:
+  # a green build proves it compiles, not that it behaves correctly on the DAC.
+  diagnostic-package:
+    name: Diagnostic test package (pre-release, not a product release)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/diagnostics/osd-frame-stamp'
+    needs: [unit-tests, windows-msvc-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Download MSVC build
+        uses: actions/download-artifact@v8
+        with:
+          name: GxOled-OSD-Diagnostic-Windows-x64
+          path: msvc
+      - name: Assemble package
+        run: |
+          set -euo pipefail
+          SHORT="${GITHUB_SHA::7}"
+          PKG="GxOled-OSD-Diagnostic-Package-${SHORT}"
+          mkdir -p "$PKG"
+          cp msvc/gxoled.exe "$PKG/gxoled.exe"
+          cp scripts/Test-VolumeOSD.ps1 "$PKG/"
+          cp scripts/diagnostics-package/*.cmd scripts/diagnostics-package/BASLA-BURADAN.txt "$PKG/"
+          # Windows batch files need CRLF line endings; this normalisation is idempotent.
+          for f in "$PKG"/*.cmd "$PKG"/BASLA-BURADAN.txt; do sed -i 's/\r$//; s/$/\r/' "$f"; done
+          EXE_SHA="$(sha256sum "$PKG/gxoled.exe" | cut -d' ' -f1)"
+          {
+            echo "GxOled volume-OSD diagnostic package"
+            echo "Repository        : ${GITHUB_REPOSITORY}"
+            echo "Branch            : ${GITHUB_REF_NAME}"
+            echo "Source commit     : ${GITHUB_SHA}"
+            echo "Workflow run      : ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "Built (UTC)       : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Build type        : Windows MSVC, release, sdl3-static"
+            echo "gxoled.exe SHA-256: ${EXE_SHA}"
+            echo "Status            : compiled and unit-tested by CI only. NOT physically verified on the DAC."
+            echo "                    This is a measurement build, not a fix."
+          } > "$PKG/BUILD-INFO.txt"
+          sed -i 's/$/\r/' "$PKG/BUILD-INFO.txt"
+          (cd "$PKG" && zip -r -X "../${PKG}.zip" .)
+          sha256sum "${PKG}.zip" > "${PKG}.zip.sha256"
+          echo "PKG=${PKG}" >> "$GITHUB_ENV"
+          unzip -l "${PKG}.zip"
+          for f in 1-STAMP-varsayilan.cmd 2-STAMP-bekleme-yok.cmd 3-Loglari-ac.cmd; do
+            unzip -p "${PKG}.zip" "$f" | head -c 4000 | grep -q $'\r' || { echo "::error::$f lost its CRLF line endings"; exit 1; }
+          done
+      - name: Keep the package as a workflow artifact too
+        uses: actions/upload-artifact@v7
+        with:
+          name: GxOled-OSD-Diagnostic-Package
+          path: |
+            ${{ env.PKG }}.zip
+            ${{ env.PKG }}.zip.sha256
+          if-no-files-found: error
+      - name: Publish pre-release (diagnostic only, never a v* tag)
+        run: |
+          set -euo pipefail
+          TAG="diag-osd-stamp-${GITHUB_SHA::7}"
+          case "$TAG" in v*) echo "::error::refusing to create a v* tag from the diagnostic job"; exit 1;; esac
+          cat > notes.md <<'EOF'
+          **Bu bir ürün sürümü DEĞİL, bir ölçüm paketidir.** v0.5.1 / v0.5.0 / stable etkilenmez.
+
+          Amaç: DAC ses düğmesinden sonra GxOled'in ~6 sn geç dönmesinin nerede oluştuğunu kanıtlamak
+          (kareler cihaz tarafından atılıyor mu, yoksa geç mi gösteriliyor?).
+
+          **Nasıl kullanılır:** ZIP'i `C:\gx-test` gibi kısa bir klasöre çıkar, içindeki
+          `BASLA-BURADAN.txt` dosyasını oku ve `1-STAMP-varsayilan.cmd` dosyasına çift tıkla.
+
+          Derleme yalnızca CI ile doğrulandı; DAC üzerinde fiziksel doğrulama yapılmadı.
+          Kaynak commit ve EXE SHA-256 değeri ZIP içindeki `BUILD-INFO.txt` dosyasında yazar.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${PKG}.zip" "${PKG}.zip.sha256" --clobber
+          else
+            gh release create "$TAG" "${PKG}.zip" "${PKG}.zip.sha256" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "OSD ölçüm paketi (${GITHUB_SHA::7}) — ürün sürümü değildir" \
+              --notes-file notes.md
+          fi
+
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')

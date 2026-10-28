@@ -19,12 +19,16 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
 
 > **Current release:** v0.5.1 is the **original-layout** Windows build with the DAC volume-OSD handoff correction. The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
 
+> **Known issue (measured on hardware, 2026-10-28, not fixed yet):** after you turn the DAC volume dial, the native volume display stays for roughly 6 s before GxOled's clock/media/GIF returns, instead of the intended ~2.5 s. Software timers and the HID transport were ruled out as the cause (the October 18 build behaves the same today). A measurement package that stamps every sent frame is being used to locate the delay; see [`docs/VOLUME_OSD_DIAGNOSTICS.md`](docs/VOLUME_OSD_DIAGNOSTICS.md).
+
+**Documentation:** [`docs/README.md`](docs/README.md) is the index (branches and releases, Windows build guide, Turkish test guide, volume-OSD investigation).
+
 ## Features
 
 - **Clock gallery** — digital standard/large, round/square analog, and Casio-inspired digital dial; a live 128 × 64 OLED preview.
 - **OLED burn-in mitigation** — an independent screen shifter plus clock-specific **Random Movements** and **No overlapping Pixels** modes. These distribute static pixel usage; they **do not guarantee** that burn-in cannot occur.
 - **SteelClock-Go animations** — **Matrix Rain**, **Hyperspace**, **Star Wars Intro**, and **Game of Life**, including editable/importable/exportable 128 × 64 JSON profiles. The original Go renderer runs as a helper; GxOled retains control of the USB/OLED connection.
-- **GIF playback & GIF Studio tab** — choose a GIF and start/stop its playback. A richer editor inspired by [GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio) (timeline, layers, transforms, dithering) is planned and **not yet available** in v0.5.0.
+- **GIF playback & GIF Studio tab** — choose a GIF and start/stop its playback. A richer editor inspired by [GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio) (timeline, layers, transforms, dithering) is planned and **not yet available** in v0.5.1.
 - **Display & daily controls** — device brightness levels 1–10, idle screensaver/stock display behavior, native volume overlay cooperation, and optional media information.
 - **Native Windows settings** — original dark/light interface, English/Türkçe, Tray/Window/Hybrid modes, optional Windows startup, and saved preferences.
 
@@ -47,7 +51,7 @@ The original Windows layout is pictured above. More screenshots from this projec
 
 ## Get started
 
-1. Download the [**v0.5.0 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.1) (`gxoled.exe` or Windows ZIP).
+1. Download the [**v0.5.1 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.1) (`GxOled.Advanced.v0.5.1.exe`; compare it with `SHA256SUMS.txt`).
 2. Connect a supported **SteelSeries base station** over USB and run GxOled.
 3. Open **Settings** (using the tray icon or the configured window mode). Select **Clock**, **Animations**, **GIF Studio**, or **Display**.
 4. Use **Display → Clock burn-in protection** for clock movement, and **Display → OLED screen shift** for whole-screen shifting.
@@ -142,7 +146,7 @@ Preserve both profile-copy locations when you edit built-in defaults; `//go:embe
 
 OLED protection **reduces risk**, not panel wear. Avoid leaving static imagery at high brightness indefinitely.
 
-**GIF Studio in v0.5.0:** provides **Add GIF...** and **Start / Stop GIF** using the existing playback engine. It is not yet a layer editor, video editor, trim timeline, or image-compositing workflow. Keep development claims separate from release claims. The application already bounds image size, frame count and decoded pixels for safety.
+**GIF Studio in v0.5.0 / v0.5.1:** provides **Add GIF...** and **Start / Stop GIF** using the existing playback engine. It is not yet a layer editor, video editor, trim timeline, or image-compositing workflow. Keep development claims separate from release claims. The application already bounds image size, frame count and decoded pixels for safety.
 
 **Configuration:** on Windows settings normally reside at `%APPDATA%\GxOled\config.toml` and are persisted between launches. Keep backwards compatibility for existing serialized enum variants and stored paths. Windows startup registration belongs to the current user rather than a system-wide installation. Device brightness uses protocol steps 1–10, which are not calibrated percentages.
 
@@ -174,7 +178,7 @@ gxoled-cli img image.png
 gxoled-cli anim animation.gif
 ```
 
-For direct USB permissions on Linux, review [`11-steelseries-arctis-nova.rules`](11-steelseries-arctis-nova.rules). A Flatpak manifest and systemd user service are provided under [`flatpak/`](flatpak/) and [`gxoled.service`](gxoled.service), but they require platform-specific packaging and testing. A prebuilt Linux or macOS binary is not promised by the Windows v0.5.0 release.
+For direct USB permissions on Linux, review [`11-steelseries-arctis-nova.rules`](11-steelseries-arctis-nova.rules). A Flatpak manifest and systemd user service are provided under [`flatpak/`](flatpak/) and [`gxoled.service`](gxoled.service), but they require platform-specific packaging and testing. A prebuilt Linux or macOS binary is not promised by the Windows releases.
 
 </details>
 

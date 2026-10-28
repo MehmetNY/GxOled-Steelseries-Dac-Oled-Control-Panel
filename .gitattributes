@@ -1,0 +1,4 @@
+# Windows batch launchers must keep CRLF line endings even when checked out on Linux (CI builds the test package there).
+*.cmd text eol=crlf
+*.bat text eol=crlf
+scripts/diagnostics-package/BASLA-BURADAN.txt text eol=crlf

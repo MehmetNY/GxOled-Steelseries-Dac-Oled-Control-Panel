@@ -99,3 +99,20 @@ Cadence note: with the clock the app sends about one frame per second. With a me
 - The HID transport (`create_report`, `draw`, `retry_report`, `get_events`) is byte-for-byte the same in the preserved 2026-10-18 source and in v0.5.1. Only event classification and bounds checks differ. v0.5.1's de-duplication can shorten the hold but never lengthen it.
 - Upstream JerwuQu/ggoled has no volume-OSD handling at all; the hold logic is this project's own addition.
 - The similar project Nexus-Nexx/arctis-nova-pro-oled uses the same `0x93` two-chunk transport, streams at 30 fps and draws its own volume overlay for 1.5 s after a dial report. Whether the native overlay yields to a 30 fps stream is untested on this DAC and is *not* proposed as a fix here.
+
+## How the fifth trial is run (2026-10-28)
+
+The frame-stamp measurement is distributed as a ready-made Windows package so nobody has to build anything:
+CI publishes a **pre-release** (tag `diag-osd-stamp-<sha7>`, never a `v*` tag) containing `gxoled.exe`, the
+launchers and a Turkish step-by-step guide. See [`TR-TEST-REHBERI.md`](TR-TEST-REHBERI.md) and
+[`../scripts/diagnostics-package/BASLA-BURADAN.txt`](../scripts/diagnostics-package/BASLA-BURADAN.txt).
+`BUILD-INFO.txt` inside the ZIP names the source commit and EXE SHA-256.
+
+## Experiments deliberately NOT implemented yet
+
+- **Sending the documented `0x95` "return to SteelSeries UI" report once at hold end.** The report exists and is used
+  on quit (`ConfigQuitMode::StockUi`), but nothing shows that it dismisses the volume overlay or is safe mid-session,
+  and the project rule is not to send unverified firmware/reset-style commands. It stays off the table unless the
+  owner explicitly asks for it as a clearly labelled, off-by-default experiment.
+- **A fixed higher frame rate during the handoff.** The 10 Hz pulse already produced tearing and did not shorten the delay.
+- **Shortening the timers blindly.** The delay is not the software hold (the hold ends at ~2.5 s and the frame follows in ~4 ms).
