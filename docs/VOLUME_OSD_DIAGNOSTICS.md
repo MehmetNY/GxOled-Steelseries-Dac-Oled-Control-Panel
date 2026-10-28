@@ -116,3 +116,41 @@ launchers and a Turkish step-by-step guide. See [`TR-TEST-REHBERI.md`](TR-TEST-R
   owner explicitly asks for it as a clearly labelled, off-by-default experiment.
 - **A fixed higher frame rate during the handoff.** The 10 Hz pulse already produced tearing and did not shorten the delay.
 - **Shortening the timers blindly.** The delay is not the software hold (the hold ends at ~2.5 s and the frame follows in ~4 ms).
+
+## Fifth trial result (2026-10-28, hardware, 1080p 60 fps video + stamped logs)
+
+Method: `scripts/analysis/analyze_osd_video.py` finds the OLED in the video, marks every episode in which
+the base station's own home screen (top-centre "USB" tab) is visible, aligns video and log time, and names the
+first frame (by stamp counter) that was written at or after the moment the native screen disappeared.
+The tool's output matches the counters read by eye from the same frames.
+
+| Take | Mode | Last dial report → last frame that was **not** shown | → first frame that **was** shown |
+| --- | --- | --- | --- |
+| 1 | default (2.5 s hold) | seq 8 @ 4.67 s | seq 9 @ 5.67 s |
+| 2 | default | seq 14 @ 3.87 s | seq 15 @ 4.87 s |
+| 3 | default | seq 20 @ 5.24 s | seq 21 @ 6.24 s |
+| 4 | no-hold | seq 9 @ 4.94 s | seq 10 @ 5.94 s |
+| 5 | no-hold | seq 19 @ 4.50 s | seq 20 @ 5.50 s |
+| 6 | no-hold | seq 28 @ 5.50 s | seq 29 @ 6.50 s |
+| 7 | no-hold | seq 38 @ 4.67 s | seq 39 @ 5.67 s |
+
+What it shows:
+
+1. **Frames written while the native screen is up are discarded, not latched.** Every counter between the dial and
+   the ending frame is missing from the video. (Resolves the "latched vs discarded" question of the fifth trial.)
+2. **The native screen disappears at the instant a host frame is written after the firmware's lock expires.**
+   In the three default takes the video shows the native screen ending 2.157–2.160 s (video clock) after the
+   log time of the ending frame, i.e. a constant lag, not a timer of its own.
+3. The lock ends 3.9–6.5 s after the last dial report; the exact value is only known to within the 1 s heartbeat
+   (last discarded frame, first shown frame). It is **not** a constant offset from the last report (take 2 ends
+   before take 3's last discarded frame) and is roughly 6.1 s after the *first* report in most takes; continued
+   turning can extend it (take 5). The firmware's rule is not fully known.
+4. No host-side timing (hold 2.5 s, no hold, 10 Hz pulse measured earlier) changes this, because the frames are
+   ignored. A faster heartbeat after the lock could shave at most the wait for the next frame (≤ 1 s).
+
+Consequence: the remaining levers are **device commands**. The October 18 build was physically reported as
+"about 2.5 s" and behaves like v0.5.1 today, so the device state differs from then. The OSD lab (`GXOLED_OSD_LAB=1`,
+`scripts/diagnostics-package/`) tries, one per knob turn: `0x95` return-to-UI at three moments, the `0x8d`
+"Sonar present" flag (SteelSeries GG sets it while running; the base station keeps it until told otherwise or
+power-cycled) and the `0x89` home-screen type. It also logs the device's own UX settings (`0x80`) and every
+unrecognised inbound report, which may reveal a signal for "native screen ended" and make future tests camera-free.

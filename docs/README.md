@@ -18,6 +18,7 @@ Related files outside `docs/`:
 - [`../go_animations/UPSTREAM.md`](../go_animations/UPSTREAM.md) — steelclock-go attribution and license notes.
 - [`../diagnostics/legacy-2026-10-18/`](../diagnostics/legacy-2026-10-18/) — the preserved October 18 source used as a historical comparison build.
 - [`../scripts/`](../scripts/) — `Test-VolumeOSD.ps1` and the double-click launchers of the measurement package.
+- [`../scripts/analysis/analyze_osd_video.py`](../scripts/analysis/analyze_osd_video.py) — reads a phone video of the OLED plus the trace log and reports how long the native screen stayed up and which frame ended it (needs ffmpeg + numpy).
 
 ## Ground rules that apply to every change
 
