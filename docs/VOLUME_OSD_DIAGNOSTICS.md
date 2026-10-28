@@ -108,14 +108,15 @@ launchers and a Turkish step-by-step guide. See [`TR-TEST-REHBERI.md`](TR-TEST-R
 [`../scripts/diagnostics-package/BASLA-BURADAN.txt`](../scripts/diagnostics-package/BASLA-BURADAN.txt).
 `BUILD-INFO.txt` inside the ZIP names the source commit and EXE SHA-256.
 
-## Experiments deliberately NOT implemented yet
+## Experiments that stay off the table
 
-- **Sending the documented `0x95` "return to SteelSeries UI" report once at hold end.** The report exists and is used
-  on quit (`ConfigQuitMode::StockUi`), but nothing shows that it dismisses the volume overlay or is safe mid-session,
-  and the project rule is not to send unverified firmware/reset-style commands. It stays off the table unless the
-  owner explicitly asks for it as a clearly labelled, off-by-default experiment.
-- **A fixed higher frame rate during the handoff.** The 10 Hz pulse already produced tearing and did not shorten the delay.
+- **A fixed higher frame rate during the handoff.** The 10 Hz pulse already produced tearing and did not shorten the delay
+  (the fifth-trial video analysis below explains why: the frames are discarded).
 - **Shortening the timers blindly.** The delay is not the software hold (the hold ends at ~2.5 s and the frame follows in ~4 ms).
+
+Device commands that were earlier excluded as "unverified" (`0x95`, `0x8d`, `0x89`) are **now tried on purpose** in the OSD lab,
+because the owner lifted that restriction on 2026-10-28 ("sorunu çözmek ve tüm işlevleri çalışan bir uygulama yapmak yegane
+önceliğimiz"). They stay opt-in (`GXOLED_OSD_LAB=1`) until one of them is shown on hardware to shorten the delay.
 
 ## Fifth trial result (2026-10-28, hardware, 1080p 60 fps video + stamped logs)
 
