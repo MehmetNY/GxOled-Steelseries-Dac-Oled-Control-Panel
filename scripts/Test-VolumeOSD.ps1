@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory=$true)][string]$ExePath,
-    [ValidateSet("default", "legacy", "no-hold", "pulse")][string]$Mode = "default"
+    [ValidateSet("default", "legacy", "no-hold", "pulse")][string]$Mode = "default",
+    # Burn a 4-digit frame counter into the bottom-right corner of every sent frame so a
+    # camera can show which HID write the panel finally displayed. Works with any -Mode.
+    [switch]$Stamp
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,7 +32,8 @@ if ($possibleWriters.Count -gt 0) {
 
 $dir = Join-Path $env:TEMP 'GxOled-OSD-Diagnostics'
 New-Item -ItemType Directory -Path $dir -Force | Out-Null
-$logPath = Join-Path $dir ("osd-{0}-{1}.log" -f $Mode, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$modeName = if ($Stamp) { "$Mode-stamp" } else { $Mode }
+$logPath = Join-Path $dir ("osd-{0}-{1}.log" -f $modeName, (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $processLogPath = [System.IO.Path]::ChangeExtension($logPath, ".processes.txt")
 $possibleWriters | Select-Object ProcessId, Name, ExecutablePath | Format-List |
     Out-String | Set-Content -LiteralPath $processLogPath -Encoding UTF8
@@ -38,8 +42,9 @@ $env:GXOLED_OSD_TRACE_FILE = $logPath
 $env:GXOLED_OSD_LEGACY = if ($Mode -eq 'legacy') { '1' } else { '0' }
 $env:GXOLED_OSD_HOLD_MS = if ($Mode -in @('no-hold','pulse')) { '0' } else { '2500' }
 $env:GXOLED_OSD_PULSE = if ($Mode -eq 'pulse') { '1' } else { '0' }
+$env:GXOLED_OSD_STAMP = if ($Stamp) { '1' } else { '0' }
 
-Write-Host "Diagnostic mode: $Mode"
+Write-Host "Diagnostic mode: $Mode (frame stamp: $([bool]$Stamp))"
 Write-Host "Log file: $logPath"
 Write-Host "Start GxOled, rotate the DAC volume once, then stop moving it."
 Write-Host "Observe the physical OLED return delay. Exit via 'Quit GxOled' in the tray."
@@ -51,3 +56,4 @@ Remove-Item Env:\GXOLED_OSD_TRACE_FILE -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_LEGACY -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_HOLD_MS -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_PULSE -ErrorAction SilentlyContinue
+Remove-Item Env:\GXOLED_OSD_STAMP -ErrorAction SilentlyContinue

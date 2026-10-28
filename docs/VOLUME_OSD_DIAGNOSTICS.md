@@ -69,3 +69,33 @@ The complete `ggoled-volume-osd-bugfix.zip` generated on October 18, 2026 (the v
 Compare that historical binary against current v0.5.1 with only one process running, the same USB DAC, similar clock/GIF state, and SteelSeries GG closed. The October 18 version uses original application names/config folders, so avoid accepting its startup-on-boot option during this one-time test. It has the old UI and is **not** a stable v0.5.1 replacement. The only purpose of the test is to establish whether the old *known-good executable* still restores the OLED in ~2.5s on the same present hardware.
 
 If it does, prioritize differential debugging of transport, event dispatch, rendering and frame scheduling between original and modern sources before claiming firmware cause. If it does not, the hardware or external environment/firmware behavior has changed since October 19 (or there is a baseline observation mismatch); inspect current DAC native OSD duration. Pulse testing already produced tearing and no speed improvement: do not turn it on by default or ship it.
+
+## Fifth trial: frame stamp (was the early frame buffered, or discarded?)
+
+The user cannot measure a "native-only" baseline: without GxOled the stock UI is always on screen, so there is no overlay that ever closes. The stamp trial replaces that baseline with a measurement that works with the hardware as it is.
+
+```powershell
+.\Test-VolumeOSD.ps1 -ExePath '.\gxoled.exe' -Mode no-hold -Stamp
+.\Test-VolumeOSD.ps1 -ExePath '.\gxoled.exe' -Mode default -Stamp
+```
+
+`-Stamp` (`GXOLED_OSD_STAMP=1`) burns a four-digit frame counter into the bottom-right corner of every frame that is actually sent. The counter is drawn on a copy, so the send cadence (on change, plus the 1 Hz heartbeat) is exactly the normal one. The log gets one `FRAME seq=N since_dial_ms=…` line per sent frame for ten seconds after the last dial report, and each `DIAL` line records `last_seq`.
+
+How to film it: phone at 60 fps, OLED and the volume knob in frame, one short knob turn per take, at least five takes per mode. For each take write down the first counter value that appears after the stock UI disappears, and the time from the knob stopping to that moment.
+
+Look up that counter in the log (`since_dial_ms` of that `seq`) and compare with the filmed return time:
+
+| First visible `seq` was sent… | Meaning |
+| --- | --- |
+| about when the stock UI disappeared (a late frame) | Frames sent while the stock UI was up are **discarded**; only a write after the firmware lets go is shown. Nothing the host sends earlier can help. |
+| right after the last dial report (an early frame, e.g. ~200 ms in `no-hold`) | The firmware **latched** the early frame and showed it late. The display content was ready all along; the delay is the firmware's own timer. |
+| in between, or it varies a lot between takes | Mixed behaviour; the spread itself is the finding. Note whether media/GIF was running (see the cadence note below). |
+
+Cadence note: with the clock the app sends about one frame per second. With a media title wider than 128 px (a `Scroll` layer) or a GIF/Go animation it sends up to 30 frames per second. Record which one was active on every take.
+
+## Facts verified in the source (2026-10-28 review)
+
+- After the 2.5 s hold, `force_redraw` is always true (the last frame is more than 1 s old), so the first post-hold frame goes out immediately. Matches the logs (`HOLD_END` → `FRAME_OK` in ~4 ms).
+- The HID transport (`create_report`, `draw`, `retry_report`, `get_events`) is byte-for-byte the same in the preserved 2026-10-18 source and in v0.5.1. Only event classification and bounds checks differ. v0.5.1's de-duplication can shorten the hold but never lengthen it.
+- Upstream JerwuQu/ggoled has no volume-OSD handling at all; the hold logic is this project's own addition.
+- The similar project Nexus-Nexx/arctis-nova-pro-oled uses the same `0x93` two-chunk transport, streams at 30 fps and draws its own volume overlay for 1.5 s after a dial report. Whether the native overlay yields to a 30 fps stream is untested on this DAC and is *not* proposed as a fix here.

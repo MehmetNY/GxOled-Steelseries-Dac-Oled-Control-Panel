@@ -425,8 +425,15 @@ fn run_draw_device_thread(
             }
         }
     };
-    osd_log(&format!("START hold_ms={} legacy={} pulse={} fps={}",
-        osd_hold.as_millis(), osd_legacy, osd_pulse, fps));
+    // Opt-in: burn a 4-digit frame counter into the bottom-right corner of every frame that is
+    // actually sent, so a camera can show which HID write the panel finally displayed. The
+    // counter is drawn on a copy: `prev_screen` stays unstamped, so the send cadence
+    // (change-or-1Hz heartbeat) is identical to the normal build.
+    let osd_stamp = std::env::var("GXOLED_OSD_STAMP").ok().as_deref() == Some("1");
+    let mut osd_seq: u32 = 0;
+    let mut osd_last_dial: Option<Instant> = None;
+    osd_log(&format!("START hold_ms={} legacy={} pulse={} stamp={} fps={}",
+        osd_hold.as_millis(), osd_legacy, osd_pulse, osd_stamp, fps));
     let mut osd_trace_remaining_frames = 0u8;
     let mut last_accepted_volume_event: Option<Instant> = None;
     loop {
@@ -486,7 +493,8 @@ fn run_draw_device_thread(
                         } else {
                             is_new_volume_dial_action(&mut last_volume_dial_report, *volume, event_time)
                         };
-                        osd_log(&format!("DIAL level={volume} accepted={arm} since_previous_ms={since_last:?}"));
+                        osd_last_dial = Some(event_time);
+                        osd_log(&format!("DIAL level={volume} accepted={arm} since_previous_ms={since_last:?} last_seq={osd_seq}"));
                     }
                     DeviceEvent::Volume { volume } if osd_legacy => {
                         // 2026-10-18 working behavior: old parser combined unsolicited and
@@ -655,8 +663,18 @@ fn run_draw_device_thread(
             if screen != prev_screen || force_redraw {
                 last_frame_time = frame_time;
                 let draw_start = Instant::now();
-                if let Err(err) = dev.draw(&screen, 0, 0) {
-                    osd_log(&format!("FRAME_ERROR elapsed_ms={} error={err}",
+                let stamped;
+                let to_send: &Bitmap = if osd_stamp {
+                    osd_seq = osd_seq.wrapping_add(1);
+                    let mut copy = screen.crop(0, 0, screen.w, screen.h);
+                    stamp_sequence(&mut copy, osd_seq);
+                    stamped = copy;
+                    &stamped
+                } else {
+                    &screen
+                };
+                if let Err(err) = dev.draw(to_send, 0, 0) {
+                    osd_log(&format!("FRAME_ERROR seq={osd_seq} elapsed_ms={} error={err}",
                         draw_start.elapsed().as_millis()));
                     if connected {
                         connected = false;
@@ -667,6 +685,17 @@ fn run_draw_device_thread(
                         osd_log(&format!("FRAME_OK write_ms={} after_hold=true pulse={}",
                             draw_start.elapsed().as_millis(), recent_dial_pulse));
                         osd_trace_remaining_frames -= 1;
+                    }
+                    // Stamp mode: one line per sent frame for ten seconds after the last dial
+                    // report, so the first counter value visible on camera maps to a send time.
+                    if osd_stamp && osd_trace_file.is_some() {
+                        if let Some(dial) = osd_last_dial {
+                            let since_dial = frame_time.saturating_duration_since(dial);
+                            if since_dial < Duration::from_secs(10) {
+                                osd_log(&format!("FRAME seq={osd_seq} since_dial_ms={} write_ms={} pulse={}",
+                                    since_dial.as_millis(), draw_start.elapsed().as_millis(), recent_dial_pulse));
+                            }
+                        }
                     }
                     prev_screen = screen;
                 }
@@ -707,6 +736,52 @@ fn clock_digit_rows(digit: u8) -> [u8; 5] {
         8 => [0b111, 0b101, 0b111, 0b101, 0b111],
         9 => [0b111, 0b101, 0b111, 0b001, 0b111],
         _ => [0; 5],
+    }
+}
+
+/// Diagnostic frame counter (`GXOLED_OSD_STAMP=1`): four decimal digits (`seq % 10000`), each
+/// glyph the 3x5 clock font scaled 2x, on a cleared plate in the bottom-right corner.
+fn stamp_sequence(bitmap: &mut Bitmap, seq: u32) {
+    const SCALE: isize = 2;
+    const GLYPH_W: isize = 3 * SCALE;
+    const GLYPH_H: isize = 5 * SCALE;
+    const GAP: isize = 2;
+    const PAD: isize = 2;
+    const DIGITS: isize = 4;
+    let plate_w = DIGITS * GLYPH_W + (DIGITS - 1) * GAP + 2 * PAD;
+    let plate_h = GLYPH_H + 2 * PAD;
+    let origin_x = bitmap.w as isize - plate_w;
+    let origin_y = bitmap.h as isize - plate_h;
+    if origin_x < 0 || origin_y < 0 {
+        return;
+    }
+    for y in 0..plate_h {
+        for x in 0..plate_w {
+            bitmap
+                .data
+                .set((origin_y + y) as usize * bitmap.w + (origin_x + x) as usize, false);
+        }
+    }
+    let digits = [(seq / 1000) % 10, (seq / 100) % 10, (seq / 10) % 10, seq % 10];
+    for (index, digit) in digits.iter().enumerate() {
+        let rows = clock_digit_rows(*digit as u8);
+        let glyph_x = origin_x + PAD + index as isize * (GLYPH_W + GAP);
+        let glyph_y = origin_y + PAD;
+        for (row, bits) in rows.iter().enumerate() {
+            for col in 0..3usize {
+                if *bits & (0b100u8 >> col) != 0 {
+                    for dy in 0..SCALE {
+                        for dx in 0..SCALE {
+                            put_pixel(
+                                bitmap,
+                                glyph_x + col as isize * SCALE + dx,
+                                glyph_y + row as isize * SCALE + dy,
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1148,5 +1223,63 @@ mod volume_osd_dedup_tests {
         assert!(is_new_volume_dial_action(&mut previous, 20, start));
         assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(200)));
         assert!(is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(2800)));
+    }
+}
+
+#[cfg(test)]
+mod osd_stamp_tests {
+    use super::{Bitmap, stamp_sequence};
+
+    const PLATE_W: usize = 34;
+    const PLATE_H: usize = 14;
+
+    fn rendered(seq: u32) -> Bitmap {
+        let mut bitmap = Bitmap::new(128, 64, false);
+        stamp_sequence(&mut bitmap, seq);
+        bitmap
+    }
+
+    #[test]
+    fn stamp_touches_only_the_bottom_right_plate() {
+        let mut bitmap = Bitmap::new(128, 64, true);
+        stamp_sequence(&mut bitmap, 1234);
+        let mut plate_lit = 0;
+        let mut plate_cleared = 0;
+        for y in 0..64 {
+            for x in 0..128 {
+                let inside = x >= 128 - PLATE_W && y >= 64 - PLATE_H;
+                let value = bitmap.data[y * 128 + x];
+                if inside {
+                    if value { plate_lit += 1 } else { plate_cleared += 1 }
+                } else {
+                    assert!(value, "pixel outside the plate changed at ({x},{y})");
+                }
+            }
+        }
+        assert!(plate_lit > 0 && plate_cleared > 0);
+    }
+
+    #[test]
+    fn different_counters_differ_and_wrap_at_ten_thousand() {
+        assert_ne!(rendered(1), rendered(2));
+        assert_ne!(rendered(1000), rendered(2000));
+        assert_eq!(rendered(0), rendered(10_000));
+        assert_eq!(rendered(1234), rendered(11_234));
+    }
+
+    #[test]
+    fn stamping_a_copy_leaves_the_original_screen_unchanged() {
+        let screen = Bitmap::new(128, 64, false);
+        let mut copy = screen.crop(0, 0, screen.w, screen.h);
+        stamp_sequence(&mut copy, 7);
+        assert_ne!(screen, copy);
+        assert_eq!(screen, Bitmap::new(128, 64, false));
+    }
+
+    #[test]
+    fn tiny_bitmaps_are_left_alone() {
+        let mut bitmap = Bitmap::new(20, 10, false);
+        stamp_sequence(&mut bitmap, 8888);
+        assert_eq!(bitmap, Bitmap::new(20, 10, false));
     }
 }
