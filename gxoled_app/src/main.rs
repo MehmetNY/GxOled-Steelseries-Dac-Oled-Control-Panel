@@ -116,13 +116,17 @@ enum ConfigUiStyle {
     Classic,
 }
 
-/// "0.5.3-beta" -> "0.5.3 Beta" (for labels); other versions are shown unchanged.
-fn display_version() -> String {
-    let v = env!("CARGO_PKG_VERSION");
-    match v.strip_suffix("-beta") {
-        Some(base) => format!("{base} Beta"),
-        None => v.to_owned(),
+/// "0.5.3-beta" -> "0.5.3 Beta", "0.5.3-beta.2" -> "0.5.3 Beta 2" (for labels); other versions are shown unchanged.
+fn display_version_of(version: &str) -> String {
+    match version.split_once("-beta") {
+        Some((base, "")) => format!("{base} Beta"),
+        Some((base, rest)) => format!("{base} Beta {}", rest.trim_start_matches('.')),
+        None => version.to_owned(),
     }
+}
+
+fn display_version() -> String {
+    display_version_of(env!("CARGO_PKG_VERSION"))
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -2294,6 +2298,18 @@ mod single_instance_tests {
     fn second_call_in_the_same_process_sees_the_mutex() {
         assert!(!another_instance_is_running());
         assert!(another_instance_is_running());
+    }
+}
+
+#[cfg(test)]
+mod display_version_tests {
+    use super::display_version_of;
+
+    #[test]
+    fn beta_versions_read_as_words_and_stable_ones_are_unchanged() {
+        assert_eq!(display_version_of("0.5.2"), "0.5.2");
+        assert_eq!(display_version_of("0.5.3-beta"), "0.5.3 Beta");
+        assert_eq!(display_version_of("0.5.3-beta.2"), "0.5.3 Beta 2");
     }
 }
 

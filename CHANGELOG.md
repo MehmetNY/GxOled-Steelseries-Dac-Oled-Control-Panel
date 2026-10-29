@@ -1,3 +1,12 @@
+## GxOled Advanced v0.5.3-beta.2 — beta fix: a way back to the modern interface from the classic window
+
+> **Pre-release.** Stable stays at v0.5.2. This replaces the earlier pre-release `v0.5.3-beta` (kept, not deleted).
+
+- **Fix:** after choosing *Classic* there was no control in the classic window to return to *Modern* — only the tray menu and `--modern-ui` could. The classic window now has a **Modern UI (Beta)** button in its left rail, visible on every page; it switches to the modern window at once and saves the choice. (Found by the owner while trying the way back.)
+- The caption of the classic window reads *v0.5.3 Beta 2*; labels derived from the version handle `-beta.N` (`display_version_of` is unit-tested).
+- Everything else is as in `v0.5.3-beta`: the modern interface is optional; switch styles from the tray menu (*Settings window style (Beta)*), from *General → Settings window (Beta)* in the modern window, from the new classic-rail button, or with `--classic-ui` / `--modern-ui`; automatic fall-back to Classic if the modern window fails; config key `ui_style`. Details: `docs/MODERN-UI-BETA.md`; third-party licences: `THIRD_PARTY_NOTICES.md`.
+- **Verification status (be precise):** compiled and unit-tested on Windows in CI for the commit named in the release notes. **Not verified on a physical Windows PC / base station:** the new classic-rail button's position and look (it is owner-drawn like the Quit button, placed above it), and everything listed as unverified under `v0.5.3-beta` (modern window behaviour, DPI changes, title-bar colouring, resizing, the profile editor's text control, repaint cost).
+
 ## GxOled Advanced v0.5.3-beta — modern settings interface (Beta, optional)
 
 > **Pre-release for trying out a new look.** The stable line stays at v0.5.2 (`main`, `stable`, `v0.5.0`–`v0.5.2` are untouched). If you do not like the new interface, switch back in one click — see *Going back* below.

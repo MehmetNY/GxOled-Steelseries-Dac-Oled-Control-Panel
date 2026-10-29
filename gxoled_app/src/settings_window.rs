@@ -3,7 +3,7 @@
 #![cfg(target_os = "windows")]
 
 use std::{ffi::c_void, ptr, sync::{mpsc::Sender, Mutex, OnceLock, atomic::{AtomicBool, AtomicU8, AtomicIsize, Ordering}}};
-use super::{MenuEvent, ConfigClockStyle, ConfigUiMode, ConfigLanguage, ConfigTheme, ConfigTimeMode, ConfigShiftMode, ClockBurnInMode, StatusNotifyMode, ConfigQuitMode, Config, GoAnimation};
+use super::{MenuEvent, ConfigClockStyle, ConfigUiMode, ConfigUiStyle, ConfigLanguage, ConfigTheme, ConfigTimeMode, ConfigShiftMode, ClockBurnInMode, StatusNotifyMode, ConfigQuitMode, Config, GoAnimation};
 
 type Handle = *mut c_void;
 const WM_ERASEBKGND: u32 = 0x0014;
@@ -24,6 +24,8 @@ const ID_ABOUT_CREDITS:u32=723;
 const ID_ABOUT_COFFEE:u32=724;
 const ID_QR_METHOD:u32=725;
 const ID_QR_HINT:u32=726;
+// Beta: rail button that switches to the modern settings window (same id as the modern UI's 'Modern' chip).
+const ID_UI_MODERN:u32=392;
 const SB_VERT:i32=1;
 const SIF_RANGE:u32=0x0001;
 const SIF_PAGE:u32=0x0002;
@@ -572,6 +574,7 @@ fn update_labels(buttons:&[(u32,usize)], language:ConfigLanguage) {
             369 => "GitHub · MehmetNY/GxOled",
             ID_KOFI => "Ko-fi · Support GxOled",
             371 => if tr {"GxOled'den çık"}else{"Quit GxOled"},
+            ID_UI_MODERN => if tr {"Modern arayüz"}else{"Modern UI (Beta)"},
             372 => if tr {"Profili düzenle..."}else{"Edit selected profile..."},
             ID_PROFILE_SELECT => if tr {"Profili uygula"}else{"Use selected"},
             ID_PROFILE_NEW => if tr {"Yeni profil"}else{"New Profile"},
@@ -659,14 +662,14 @@ fn layout_window(){
         let Ok(mut s)=state.lock() else{return};
         let (cw,ch,left,form,sc,_)=main_layout(&s);
         let px=|n:i32|n*sc/100;
-        let navigation=s.buttons.iter().filter(|(id,_)|(200..207).contains(id) || *id==371)
+        let navigation=s.buttons.iter().filter(|(id,_)|(200..207).contains(id) || *id==371 || *id==ID_UI_MODERN)
             .map(|(id,h)| {
                 // Visual order is General, Clock, Animations, GIF Studio, Display, Media, About.
                 // Control IDs and existing page indices intentionally remain unchanged.
                 let nav_order=match *id {200=>0,201=>1,202=>2,206=>3,203=>4,204=>5,205=>6,_=>0};
                 let step=px(49);
-                let y=if *id==371 {ch-px(53)}else{px(76)+nav_order*step};
-                let height=if *id==371 {px(32)}else{px(39)};
+                let y=if *id==371 {ch-px(53)} else if *id==ID_UI_MODERN {ch-px(53)-px(46)} else {px(76)+nav_order*step};
+                let height=if *id==371 {px(32)} else if *id==ID_UI_MODERN {px(36)} else {px(39)};
                 (*h,px(14),y,if *id==371 {px(128)} else {(left-px(30)).max(px(92))},height)
             }).collect::<Vec<_>>();
         let page=s.page;
@@ -867,7 +870,7 @@ fn paint_panels(dc:Handle, s:&State,cw:i32,ch:i32){
         if s.page!=5 {
             draw_label(dc,"SteelSeries  •  128 x 64",
                 &Rect{left:p_x,top:346,right:cw-18,bottom:374},muted,false);
-            draw_label(dc,"GxOled Advanced v0.5.3 Beta",
+            draw_label(dc,"GxOled Advanced v0.5.3 Beta 2",
                 &Rect{left:p_x,top:395,right:cw-20,bottom:422},muted,false);
             rounded(dc,&Rect{left:p_x-4,top:458,right:cw-25,bottom:555},
                 if dark{color(30,35,43)}else{color(240,249,248)},border,16);
@@ -1004,6 +1007,7 @@ unsafe extern "system" fn wnd_proc(hwnd:Handle, message:u32, w:usize, l:isize)->
                     369 => { open_github(); None },
                     ID_KOFI => { open_kofi(); None },
                     371 => Some(MenuEvent::Quit),
+                    ID_UI_MODERN => Some(MenuEvent::SetUiStyle(ConfigUiStyle::Modern)),
                     372 => { open_profile_editor(); None },
                     ID_STARTUP => Some(MenuEvent::ToggleStartupFromWindow),
                     ID_GIF_ADD => Some(MenuEvent::OpenGifPickerFromWindow),
@@ -1146,6 +1150,10 @@ pub fn create(tx:Sender<MenuEvent>) -> Result<(),String> {
     let quit=control(hwnd,"BUTTON","Quit GxOled",371,8,365,114,31,WS_TABSTOP);
     if !font.is_null(){unsafe{SendMessageW(quit,WM_SETFONT,font as usize,1);}}
     buttons.push((371,quit as usize));
+    // Beta: a way back to the modern settings window from the classic one (visible on every page).
+    let modern=control(hwnd,"BUTTON","Modern UI (Beta)",ID_UI_MODERN,8,325,114,31,WS_TABSTOP);
+    if !font.is_null(){unsafe{SendMessageW(modern,WM_SETFONT,font as usize,1);}}
+    buttons.push((ID_UI_MODERN,modern as usize));
     let mut make=|tab:usize,kind:&str,label:&str,id:u32,x:i32,y:i32,w:i32,h:i32,style:u32| {
         let ctrl=control(hwnd,kind,label,id,x,y,w,h,style);
         if !font.is_null(){unsafe{SendMessageW(ctrl,WM_SETFONT,font as usize,1);}}

@@ -1,12 +1,13 @@
 name: Release (Beta)
-# Pushing a branch named release/v<version>-beta builds the Windows EXE and publishes the GitHub PRE-RELEASE
-# v<version>-beta (never marked "latest"). The version comes from the workspace Cargo.toml and must end in
-# "-beta". An existing tag or release is never overwritten, and the stable workflow (release.yml, branches
+# Pushing a branch named release/v<version>-beta (or -beta.N) builds the Windows EXE and publishes the GitHub
+# PRE-RELEASE v<version> (never marked "latest"). The version comes from the workspace Cargo.toml and must look
+# like 1.2.3-beta or 1.2.3-beta.2. An existing tag or release is never overwritten, and the stable workflow (release.yml, branches
 # release/v*-advanced) is not involved: stable, v0.5.0, v0.5.1, v0.5.2 and main are not touched by this file.
 on:
   push:
     branches:
       - 'release/v*-beta'
+      - 'release/v*-beta.*'
   workflow_dispatch:
 permissions:
   contents: write
@@ -30,7 +31,7 @@ jobs:
           $m = [regex]::Match($manifest, '(?ms)\[workspace\.package\].*?^version\s*=\s*"([^"]+)"')
           if (-not $m.Success) { throw 'workspace version not found in Cargo.toml' }
           $version = $m.Groups[1].Value
-          if ($version -notmatch '^\d+\.\d+\.\d+-beta$') { throw "Beta workflow needs a version like 1.2.3-beta, found $version" }
+          if ($version -notmatch '^\d+\.\d+\.\d+-beta(\.\d+)?$') { throw "Beta workflow needs a version like 1.2.3-beta or 1.2.3-beta.2, found $version" }
           if ($env:GITHUB_REF_NAME -like 'release/*' -and $env:GITHUB_REF_NAME -ne "release/v$version") {
             throw "Branch $env:GITHUB_REF_NAME does not match Cargo.toml version $version (expected release/v$version)"
           }
@@ -44,7 +45,7 @@ jobs:
             if (-not (Test-Path $file)) { throw "Missing beta file: $file" }
           }
           if (-not (Test-Path go_animations/gxoled-animations.exe)) { throw 'Embedded Go renderer missing' }
-          $human = $version -replace '-beta$', ' Beta'
+          $human = ($version -replace '-beta\.(\d+)$', ' Beta $1') -replace '-beta$', ' Beta'
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "HUMAN=$human" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Cargo check

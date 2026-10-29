@@ -1,18 +1,20 @@
 # Modern settings interface (v0.5.3 Beta)
 
 The beta replaces the *look* of the settings windows, not the application. Stable v0.5.2 stays as it is; this
-interface lives on the branch `release/v0.5.3-beta` and in the pre-release `v0.5.3-beta` only. `main` does not
-contain it until the owner decides to integrate it.
+interface lives on the branches `release/v0.5.3-beta*` and in the pre-releases `v0.5.3-beta` and `v0.5.3-beta.2` only
+(use the newer one: beta.2 adds the classic-window button back to the modern interface). `main` does not contain it
+until the owner decides to integrate it.
 
-## Going back to the classic interface
+## Switching between the two interfaces
 
 Any one of these is enough; none needs a re-install.
 
 | How | Effect |
 | --- | --- |
-| Tray icon → **Settings window style (Beta)** → **Classic** | Switches at once and opens the classic window. Saved. |
+| Tray icon → **Settings window style (Beta)** → **Classic** / **Modern (Beta)** | Switches at once and opens the window of that style. Saved. |
 | Modern window → **General → Settings window (Beta)** → **Classic** | Same as above, from inside the new window. |
-| Start `gxoled.exe --classic-ui` | Forces Classic and saves it (`--modern-ui` does the reverse). |
+| Classic window → **Modern UI (Beta)** button (left rail, above *Quit*, every page) | Back to the modern window. Added in v0.5.3-beta.2; v0.5.3-beta had no such button. |
+| Start `gxoled.exe --classic-ui` / `--modern-ui` | Forces that style and saves it. |
 | Edit `%APPDATA%\GxOled\config.toml`: `ui_style = "Classic"` | Same, offline. |
 | Install **v0.5.2** | Stable release without any of this code; the extra `ui_style` key is ignored. |
 

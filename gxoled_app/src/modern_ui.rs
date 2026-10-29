@@ -832,8 +832,8 @@ mod tests {
     fn version_label_matches_the_package_version() {
         let label = version_label();
         assert!(label.starts_with('v'));
-        if env!("CARGO_PKG_VERSION").ends_with("-beta") {
-            assert!(label.ends_with(" Beta"), "{label}");
+        if env!("CARGO_PKG_VERSION").contains("-beta") {
+            assert!(label.contains(" Beta"), "{label}");
             assert!(!label.contains('-'));
         } else {
             assert_eq!(label, format!("v{}", env!("CARGO_PKG_VERSION")));
