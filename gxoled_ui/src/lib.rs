@@ -80,8 +80,6 @@ pub struct Ui {
     hits: Vec<Hit>,
     overlays: Vec<Overlay>,
     list_area: Option<(Rect, usize)>,
-    /// Editor surface only: where the host puts its native text control (design units).
-    text_rect: Option<Rect>,
     frame: Vec<u8>,
     scale: f32,
     events: Vec<UiEvent>,
@@ -114,7 +112,6 @@ impl Ui {
             hits: Vec::new(),
             overlays: Vec::new(),
             list_area: None,
-            text_rect: None,
             frame: Vec::new(),
             scale: 1.0,
             events: Vec::new(),
@@ -184,7 +181,7 @@ impl Ui {
         self.hits = hits;
         self.overlays = overlays;
         self.list_area = None;
-        self.text_rect = Some(text);
+        let _ = text;
         self.scroll = 0.0;
         self.max_scroll = 0.0;
         self.base = self.engine.render(&svg, w, h, scale);
@@ -197,7 +194,6 @@ impl Ui {
         if self.model.surface == Surface::Editor {
             return self.rebuild_editor();
         }
-        self.text_rect = None;
         let (w, h, scale) = self.du();
         let layout = pages::Layout::new(w, h);
         let mut pass = 0;
@@ -252,6 +248,16 @@ impl Ui {
         let Some(base) = &self.base else { return };
         self.frame.clear();
         self.frame.extend_from_slice(base.data());
+        self.blit_overlays();
+    }
+
+    /// Draw the overlays into the current frame. Every overlay pixel is overwritten opaquely and pixels outside
+    /// its rounded corners are never touched, so repeating this without restoring the base is exact.
+    fn blit_overlays(&mut self) {
+        let Some(base) = &self.base else { return };
+        if self.frame.len() != base.data().len() {
+            return;
+        }
         let (bw, bh) = (base.width() as i32, base.height() as i32);
         let scale = self.scale;
         let viewport_top = HEADER_H * scale;
@@ -288,7 +294,22 @@ impl Ui {
     /// Re-composite only (use after `model.oled` changed; far cheaper than a full render).
     pub fn refresh_overlays(&mut self) {
         if self.base.is_some() && !self.dirty {
-            self.compose();
+            self.blit_overlays();
+        }
+    }
+
+    /// The last composited frame without triggering a render (`None` before the first one).
+    pub fn current_frame(&self) -> Option<Frame<'_>> {
+        let base = self.base.as_ref()?;
+        Some(Frame { width: base.width(), height: base.height(), rgba: &self.frame })
+    }
+
+    /// Forget a press that will never see its button-up (capture lost, window deactivated).
+    pub fn cancel_press(&mut self) {
+        if self.pressed.is_some() || self.drag.is_some() {
+            self.pressed = None;
+            self.drag = None;
+            self.dirty = true;
         }
     }
 
@@ -306,9 +327,13 @@ impl Ui {
     }
 
     /// Pixel rectangle `(x, y, w, h)` the editor's native text control should occupy (editor surface only).
+    /// Available before the first render, so the host can place its control while handling `WM_SIZE`.
     pub fn editor_text_rect_px(&self) -> Option<(i32, i32, i32, i32)> {
-        let r = self.text_rect?;
-        let s = self.current_scale();
+        if self.model.surface != Surface::Editor {
+            return None;
+        }
+        let (w, h, s) = self.du();
+        let r = editor::text_rect(w, h);
         Some(((r.x * s).round() as i32, (r.y * s).round() as i32, (r.w * s).round() as i32, (r.h * s).round() as i32))
     }
 

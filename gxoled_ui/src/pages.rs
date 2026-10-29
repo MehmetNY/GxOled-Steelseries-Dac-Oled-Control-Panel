@@ -38,11 +38,16 @@ pub struct Layout {
 }
 
 impl Layout {
+    /// Widest the page content is allowed to get; on a maximised window it is centred instead of stretched.
+    pub const MAX_W: f32 = 1520.0;
+
     pub fn new(w: f32, h: f32) -> Self {
-        let rw = (w * 0.336).clamp(340.0, 520.0);
-        let gap = if w >= 1400.0 { 52.0 } else { 34.0 };
-        let rx = w - PAD_R - rw;
-        let lx = SIDEBAR_W + PAD_L;
+        let eff = w.min(Self::MAX_W);
+        let off = (w - eff) / 2.0;
+        let rw = (eff * 0.336).clamp(340.0, 520.0);
+        let gap = if eff >= 1400.0 { 52.0 } else { 34.0 };
+        let rx = off + eff - PAD_R - rw;
+        let lx = off + SIDEBAR_W + PAD_L;
         let lw = (rx - gap - lx).max(300.0);
         Layout { w, h, lx, lw, rx, rw, top: HEADER_H }
     }

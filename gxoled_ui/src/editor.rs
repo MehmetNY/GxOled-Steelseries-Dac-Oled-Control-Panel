@@ -22,6 +22,15 @@ const GAP: f32 = 12.0;
 pub const MIN_W: f32 = 760.0;
 pub const MIN_H: f32 = 480.0;
 
+fn card_rect(w: f32, h: f32) -> Rect {
+    Rect::new(MARGIN, HEADER_H + 16.0, w - 2.0 * MARGIN, (h - HEADER_H - 16.0 - FOOTER_H).max(120.0))
+}
+
+/// Where the native text control goes for a `w` × `h` design-unit client area.
+pub fn text_rect(w: f32, h: f32) -> Rect {
+    card_rect(w, h).inset(TEXT_INSET)
+}
+
 /// Draw the editor surface for a `w` × `h` design-unit client area. Returns the text-control rectangle.
 pub fn build(c: &mut Ctx, w: f32, h: f32) -> Rect {
     let p = c.p;
@@ -39,9 +48,9 @@ pub fn build(c: &mut Ctx, w: f32, h: f32) -> Rect {
     c.sc.text_mid(w - MARGIN, HEADER_H / 2.0, hint, &Text::new(12.5, 400, p.text_muted).end());
 
     // Text card
-    let card = Rect::new(MARGIN, HEADER_H + 16.0, w - 2.0 * MARGIN, (h - HEADER_H - 16.0 - FOOTER_H).max(120.0));
+    let card = card_rect(w, h);
     c.card_frame(card);
-    let text = card.inset(TEXT_INSET);
+    let text = text_rect(w, h);
 
     // Status line
     let sy = card.bottom() + 12.0;
