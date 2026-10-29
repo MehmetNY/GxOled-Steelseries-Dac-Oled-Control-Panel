@@ -1,12 +1,16 @@
 param(
     [Parameter(Mandatory=$true)][string]$ExePath,
-    [ValidateSet("default", "legacy", "no-hold", "pulse")][string]$Mode = "default",
+    # default       = the candidate fix (0x95 when the 2.5 s hold ends, then frames)
+    # no-return-ui  = the v0.5.1 behaviour (hold, then frames only), for an A/B on the same device state
+    # legacy / no-hold / pulse = older comparison modes
+    [ValidateSet("default", "no-return-ui", "legacy", "no-hold", "pulse")][string]$Mode = "default",
     # Burn a 4-digit frame counter into the bottom-right corner of every sent frame so a
     # camera can show which HID write the panel finally displayed. Works with any -Mode.
     [switch]$Stamp,
     # Automatic experiment cycle (GXOLED_OSD_LAB): every knob turn runs the next experiment from a
     # fixed list; the stamp's leading digit is the experiment number. Implies -Stamp.
-    # Some steps send documented device commands (0x95, 0x8d, 0x89) and restore them afterwards.
+    # Steps send documented device commands (0x95, 0x8d); the lab also puts the home screen back to the
+    # detailed one at start (it undoes the earlier lab's 0x89 01) and leaves the Sonar flag set.
     [switch]$Lab
 )
 
@@ -45,6 +49,7 @@ $possibleWriters | Select-Object ProcessId, Name, ExecutablePath | Format-List |
 Write-Host "Process snapshot: $processLogPath"
 $env:GXOLED_OSD_TRACE_FILE = $logPath
 $env:GXOLED_OSD_LEGACY = if ($Mode -eq 'legacy') { '1' } else { '0' }
+$env:GXOLED_OSD_RETURN_UI = if ($Mode -eq 'no-return-ui') { '0' } else { '1' }
 $env:GXOLED_OSD_HOLD_MS = if ($Mode -in @('no-hold','pulse')) { '0' } else { '2500' }
 $env:GXOLED_OSD_PULSE = if ($Mode -eq 'pulse') { '1' } else { '0' }
 $env:GXOLED_OSD_STAMP = if ($Stamp) { '1' } else { '0' }
@@ -60,6 +65,7 @@ Write-Host "Diagnostic complete. Log: $logPath"
 if (Test-Path $logPath) { Get-Content -LiteralPath $logPath | Select-Object -Last 50 }
 Remove-Item Env:\GXOLED_OSD_TRACE_FILE -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_LEGACY -ErrorAction SilentlyContinue
+Remove-Item Env:\GXOLED_OSD_RETURN_UI -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_HOLD_MS -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_PULSE -ErrorAction SilentlyContinue
 Remove-Item Env:\GXOLED_OSD_STAMP -ErrorAction SilentlyContinue

@@ -363,6 +363,26 @@ const RECONNECT_PERIOD: Duration = Duration::from_secs(1);
 // The base station takes over its OLED temporarily to show the volume OSD.
 // Stop sending custom frames until the knob has been idle for this long.
 const VOLUME_OSD_HOLD: Duration = Duration::from_millis(2500);
+/// Pause between `0x95` ("return to the SteelSeries UI") and the first frame that follows it.
+const RETURN_UI_SETTLE: Duration = Duration::from_millis(40);
+
+/// Should the draw thread send `0x95` when the software hold ends?
+///
+/// Measured on a Nova Pro Wireless (PID 0x12e5) with a 60 fps camera on 2026-10-29: after a knob
+/// turn the base station shows its own screen and silently discards host frames for roughly
+/// 3.5 s (4.5 s observed end-to-end with 1 Hz frames); with `0x95` sent right before the first
+/// host frame the very first frame was accepted in 5 of 5 handoffs (native screen visible
+/// 2.62-2.65 s after the last report, i.e. the 2.5 s hold plus camera latency). `0x95` is a
+/// documented, non-persistent command; unlike the Sonar flag it changes no device setting.
+///
+/// `lab_step` is `Some` only in the diagnostic lab, where the experiment decides. The legacy
+/// comparison build and `GXOLED_OSD_RETURN_UI=0` keep the old behaviour.
+fn return_ui_at_hold_end(lab_step: Option<osd_lab::LabStep>, enabled: bool) -> bool {
+    match lab_step {
+        Some(step) => step.ui_at_hold_end(),
+        None => enabled,
+    }
+}
 
 /// A few DAC firmware versions repeat identical unsolicited dial events during
 /// the built-in OSD. Do not turn a 2.5-second hold into a 5–6-second hold.
@@ -413,6 +433,9 @@ fn run_draw_device_thread(
         .map(Duration::from_millis)
         .unwrap_or(VOLUME_OSD_HOLD);
     let osd_legacy = std::env::var("GXOLED_OSD_LEGACY").ok().as_deref() == Some("1");
+    // On by default (see `return_ui_at_hold_end`); `GXOLED_OSD_RETURN_UI=0` restores the v0.5.1
+    // behaviour for A/B measurements.
+    let osd_return_ui = !osd_legacy && std::env::var("GXOLED_OSD_RETURN_UI").ok().as_deref() != Some("0");
     // Opt-in, bounded test. During the first 7s after a physical dial event,
     // resend the current valid OLED frame every 100ms instead of every second.
     // Do not change pixel data or send undocumented HID commands.
@@ -438,18 +461,23 @@ fn run_draw_device_thread(
     let mut lab = osd_lab_enabled.then(|| osd_lab::OsdLab::new(osd_lab::default_steps()));
     let mut lab_hold = osd_hold;
     let mut lab_orig_home: Option<u8> = None;
-    let mut lab_sonar_changed = false;
     let mut lab_home_changed = false;
     let mut lab_last_ui_cmd: Option<Instant> = None;
     let mut raw_unknown_logged = 0u32;
-    osd_log(&format!("START hold_ms={} legacy={} pulse={} stamp={} lab={} pid=0x{:04x} fps={}",
-        osd_hold.as_millis(), osd_legacy, osd_pulse, osd_stamp, osd_lab_enabled, dev.product_id(), fps));
+    osd_log(&format!("START hold_ms={} legacy={} return_ui={} pulse={} stamp={} lab={} pid=0x{:04x} fps={}",
+        osd_hold.as_millis(), osd_legacy, osd_return_ui, osd_pulse, osd_stamp, osd_lab_enabled, dev.product_id(), fps));
     if osd_lab_enabled {
         let names: Vec<&str> = osd_lab::default_steps().iter().map(|step| step.label()).collect();
         osd_log(&format!("LAB_BEGIN steps={names:?}"));
         // Read-only: shows the device's own dim timer / home screen / Sonar flag at start.
         osd_log(&format!("LAB_QUERY_UX at=start result={:?}",
             dev.query_ux_settings().map_err(|e| e.to_string())));
+        // The 2026-10-29 lab switched the base station to the "simple" home screen (0x89 01) and
+        // could not switch it back, because the settings query does not work on this device.
+        // Its home screen was the detailed one before (visible in the first video), so put it
+        // back once; this is the only persistent setting the lab touches from now on.
+        osd_log("LAB_HOME_RESET detailed (undoes the earlier lab's 0x89 01)");
+        lab_run_pre(&dev, osd_lab::LabPre::HomeRestore, None, &osd_log);
     }
     let mut osd_trace_remaining_frames = 0u8;
     let mut last_accepted_volume_event: Option<Instant> = None;
@@ -492,10 +520,9 @@ fn run_draw_device_thread(
                     osd_log(&format!("LAB_PRE_DUE step_index={index} pre={pre:?}"));
                     lab_run_pre(&dev, pre, lab_orig_home, &osd_log);
                     match pre {
-                        osd_lab::LabPre::SonarOn => lab_sonar_changed = true,
-                        osd_lab::LabPre::SonarOff => lab_sonar_changed = false,
                         osd_lab::LabPre::HomeSimple => lab_home_changed = true,
                         osd_lab::LabPre::HomeRestore => lab_home_changed = false,
+                        osd_lab::LabPre::SonarOn | osd_lab::LabPre::SonarOff => {}
                     }
                 }
             }
@@ -601,13 +628,14 @@ sonar_present={sonar_present} raw={raw:02x?}"));
             if let Some(suppression_started) = volume_osd_started.take() {
                 osd_log(&format!("HOLD_END elapsed_ms={}",
                     Instant::now().saturating_duration_since(suppression_started).as_millis()));
-                if let Some(step) = lab.as_ref().and_then(|l| l.current_step()) {
-                    if step.ui_at_hold_end() {
-                        let result = dev.return_to_ui().map_err(|e| e.to_string());
-                        osd_log(&format!("LAB_UI_CMD when=hold-end step={} result={result:?}", step.label()));
-                        spin_sleep::sleep(Duration::from_millis(40));
-                        prev_screen = Bitmap::new(0, 0, false);
-                    }
+                let lab_step = lab.as_ref().and_then(|l| l.current_step());
+                if connected && return_ui_at_hold_end(lab_step, osd_return_ui) {
+                    let result = dev.return_to_ui().map_err(|e| e.to_string());
+                    osd_log(&format!("UI_CMD when=hold-end step={} result={result:?}",
+                        lab_step.map_or("-", |step| step.label())));
+                    spin_sleep::sleep(RETURN_UI_SETTLE);
+                    // Make sure a frame goes out right away even if nothing changed on screen.
+                    prev_screen = Bitmap::new(0, 0, false);
                 }
                 // Shift animation deadlines by the exact time yielded to the firmware. Without
                 // this, GIF playback would rush through the frames that elapsed during the OSD.
@@ -807,10 +835,9 @@ sonar_present={sonar_present} raw={raw:02x?}"));
         spin_sleep::sleep(frame_delay.saturating_sub(frame_duration));
     }
     if lab.is_some() {
-        // Leave the base station the way it was found, even if the cycle was cut short.
-        if lab_sonar_changed {
-            lab_run_pre(&dev, osd_lab::LabPre::SonarOff, lab_orig_home, &osd_log);
-        }
+        // The Sonar flag stays as the lab left it ("on"): every measurement says that is how the
+        // base station behaves out of the box, and SteelSeries GG sets it itself when it runs.
+        // A home screen type changed by a step is put back to the detailed one.
         if lab_home_changed {
             lab_run_pre(&dev, osd_lab::LabPre::HomeRestore, lab_orig_home, &osd_log);
         }
@@ -833,15 +860,11 @@ fn lab_run_pre(dev: &Device, pre: osd_lab::LabPre, orig_home: Option<u8>, log: &
             }
         }
         LabPre::HomeSimple | LabPre::HomeRestore => {
-            let target = if pre == LabPre::HomeSimple { Some(1) } else { orig_home };
-            match target {
-                Some(value) => {
-                    for (name, oled) in [("info", false), ("oled", true)] {
-                        let result = dev.set_home_screen_type_on(value, oled).map_err(|e| e.to_string());
-                        log(&format!("LAB_PRE home_screen_type={value} collection={name} result={result:?}"));
-                    }
-                }
-                None => log("LAB_PRE skipped: the device never reported its original home screen type"),
+            // Unknown original (the info-collection query fails on PID 0x12e5): detailed (0).
+            let value = if pre == LabPre::HomeSimple { 1 } else { orig_home.unwrap_or(0) };
+            for (name, oled) in [("info", false), ("oled", true)] {
+                let result = dev.set_home_screen_type_on(value, oled).map_err(|e| e.to_string());
+                log(&format!("LAB_PRE home_screen_type={value} collection={name} result={result:?}"));
             }
         }
     }
@@ -1357,6 +1380,28 @@ mod volume_osd_dedup_tests {
         assert!(is_new_volume_dial_action(&mut previous, 20, start));
         assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(200)));
         assert!(is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(2800)));
+    }
+}
+
+#[cfg(test)]
+mod return_ui_tests {
+    use super::{osd_lab::LabStep, return_ui_at_hold_end};
+
+    #[test]
+    fn product_default_sends_return_to_ui_unless_disabled() {
+        assert!(return_ui_at_hold_end(None, true));
+        assert!(!return_ui_at_hold_end(None, false));
+    }
+
+    #[test]
+    fn lab_steps_decide_for_themselves_whatever_the_default_is() {
+        for default in [true, false] {
+            assert!(return_ui_at_hold_end(Some(LabStep::UiAtEnd), default));
+            assert!(return_ui_at_hold_end(Some(LabStep::SonarOnUiAtEnd), default));
+            assert!(!return_ui_at_hold_end(Some(LabStep::Base), default));
+            assert!(!return_ui_at_hold_end(Some(LabStep::SonarOnBase), default));
+            assert!(!return_ui_at_hold_end(Some(LabStep::UiFrame), default));
+        }
     }
 }
 

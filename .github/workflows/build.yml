@@ -150,14 +150,14 @@ jobs:
             echo "Build type        : Windows MSVC, release, sdl3-static"
             echo "gxoled.exe SHA-256: ${EXE_SHA}"
             echo "Status            : compiled and unit-tested by CI only. NOT physically verified on the DAC."
-            echo "                    This is a measurement build, not a fix."
+            echo "                    Candidate fix + measurement tooling; becomes a release only after the user verifies it on the DAC."
           } > "$PKG/BUILD-INFO.txt"
           sed -i 's/$/\r/' "$PKG/BUILD-INFO.txt"
           (cd "$PKG" && zip -r -X "../${PKG}.zip" .)
           sha256sum "${PKG}.zip" > "${PKG}.zip.sha256"
           echo "PKG=${PKG}" >> "$GITHUB_ENV"
           unzip -l "${PKG}.zip"
-          for f in 1-OTOMATIK-TEST.cmd 2-Loglari-ac.cmd; do
+          for f in 1-OTOMATIK-TEST.cmd 2-Loglari-ac.cmd 3-GERCEK-KULLANIM-TESTI.cmd; do
             unzip -p "${PKG}.zip" "$f" | head -c 4000 | grep -q $'\r' || { echo "::error::$f lost its CRLF line endings"; exit 1; }
           done
       - name: Keep the package as a workflow artifact too
@@ -176,8 +176,9 @@ jobs:
           cat > notes.md <<'EOF'
           **Bu bir ürün sürümü DEĞİL, bir ölçüm paketidir.** v0.5.1 / v0.5.0 / stable etkilenmez.
 
-          Amaç: DAC ses düğmesinden sonra GxOled'in ~6 sn geç dönmesini aşabilecek cihaz komutlarını otomatik denemek
-          (video ölçümü: cihaz bu süre boyunca gönderilen kareleri atıyor).
+          Amaç: DAC ses düğmesinden sonra GxOled'in geç dönmesini gideren **aday düzeltmeyi** doğrulamak.
+          Önceki ölçüm: bekleme bitiminde `0x95` ("arayüze dön") gönderip hemen kare çizmek, yerel ekranı
+          son dönüşten ~2,6 sn sonra kapattı (5/5). Bu paket aynı oturumda eski davranışla yan yana ölçer.
 
           **Nasıl kullanılır:** ZIP'i `C:\gx-test` gibi kısa bir klasöre çıkar, içindeki
           `BASLA-BURADAN.txt` dosyasını oku ve `1-OTOMATIK-TEST.cmd` dosyasına çift tıkla.

@@ -117,6 +117,7 @@ launchers and a Turkish step-by-step guide. See [`TR-TEST-REHBERI.md`](TR-TEST-R
 Device commands that were earlier excluded as "unverified" (`0x95`, `0x8d`, `0x89`) are **now tried on purpose** in the OSD lab,
 because the owner lifted that restriction on 2026-10-28 ("sorunu çözmek ve tüm işlevleri çalışan bir uygulama yapmak yegane
 önceliğimiz"). They stay opt-in (`GXOLED_OSD_LAB=1`) until one of them is shown on hardware to shorten the delay.
+**Update 2026-10-29:** `0x95` at the end of the hold did (see the sixth trial below) and is now the default behaviour.
 
 ## Fifth trial result (2026-10-28, hardware, 1080p 60 fps video + stamped logs)
 
@@ -155,3 +156,49 @@ Consequence: the remaining levers are **device commands**. The October 18 build 
 "Sonar present" flag (SteelSeries GG sets it while running; the base station keeps it until told otherwise or
 power-cycled) and the `0x89` home-screen type. It also logs the device's own UX settings (`0x80`) and every
 unrecognised inbound report, which may reveal a signal for "native screen ended" and make future tests camera-free.
+
+## Sixth trial: the OSD lab (2026-10-29, hardware, 300 s 1080p 60 fps video + lab log)
+
+Device: Nova Pro Wireless Xbox, PID `0x12e5`. Video and log were aligned with a constant camera lag of
+**2.828 s** (spread 0.09 s over 16 episodes). The lab's EXE still had the 1 Hz heartbeat (`pulse=false` in every `FRAME`
+line), so "ending frame" times are quantised; the *bounds* below use the frame log: the last discarded frame and the frame
+that was shown. Tool: `scripts/analysis/analyze_osd_video.py VIDEO LOG`.
+
+| Step (device state) | Native screen visible after the **last** dial report | What the frame log says |
+| --- | --- | --- |
+| `base` (state at start) | 3.92 s, 4.47 s | frames at 2.50/2.87 s and 2.50/3.40 s discarded; frame at 3.87 s / 4.40 s shown |
+| `ui-at-dial` — first burst after the `0x95` | 2.57 s | first frame (2.50 s) shown |
+| `ui-at-dial` — second burst of the same group (no new `0x95`) | 3.87 s | 2.50/2.80 s discarded |
+| `ui-at-end` (`0x95` at hold end) | **2.62 s** | first frame shown |
+| `ui-then-frames-no-hold` (`0x95` before every report, no hold) | no native screen of ≥ 1 s: 10 flashes of 0.15–0.90 s | host frames accepted ≈ immediately |
+| `sonar-on` / `sonar-on+base` (`0x8d 01`) ×3 | 3.60 s, 3.60 s, 3.62 s | 2.50 s discarded, 3.54 s shown |
+| `sonar-on+ui-at-end` | **2.63 s** | first frame shown |
+| `sonar-off` (`0x8d 00`) and everything after it (`home-simple`, `home-restore`, `base`, `ui-at-dial`) | 2.56–2.59 s | first frame (2.50 s) shown |
+| `ui-at-end` (second cycle, two bursts) | **2.63 s, 2.65 s** | first frame shown |
+
+What it shows (n is small; every statement is limited to this device and these 25 episodes):
+
+1. **`0x95` ("return to the SteelSeries UI") immediately before the first host frame makes that frame stick.**
+   `ui-at-end` ended at 2.62–2.65 s after the last report in 5 of 5 episodes, in three different device states
+   (start state, Sonar flag on, Sonar flag off). The control (`base`/`sonar-on+base`) needed 3.6–4.5 s in the same states.
+   The handoff is clean in the video: native screen → one rolling-shutter tear frame → host content, no intermediate screen.
+2. **The lock is ≈ 3.4–3.8 s in the start state and with the Sonar flag on** (the bounds of the start state and of three
+   `sonar-on` takes intersect at ≈ 3.4–3.54 s). With the flag off the first frame at 2.5 s is already accepted (lock ≤ 2.5 s).
+   The on/off/on pattern (`sonar-on` ×3 → `sonar-off` … → `sonar-on` again at 3.62 s) makes the flag the likely cause, but the
+   software hold (2.5 s) hides how short the lock really is with the flag off. The start state behaves like "flag on", which
+   suggests the base station powers up that way; the settings query cannot confirm it (below).
+3. **`ui-then-frames-no-hold` works but is the wrong behaviour:** the native volume screen only flashes for 0.15–0.3 s, so the
+   firmware's own volume display is effectively suppressed. (The owner noticed the host content "arriving immediately".)
+4. **The settings query does not work on this device.** Every write to the *info* HID collection fails on Windows with
+   `WriteFile: (0x00000001) Yanlış işlev` (`0x80` ux_settings query, the `0xb0`/`0x20` probe writes); writes to the *OLED*
+   collection (`0x95`, `0x8d`, `0x89`, `0x85`) succeed, and `0x89` demonstrably changed the home screen type. Consequently the
+   lab could not read the original home screen type and **skipped `home-restore`, leaving the base station on the "simple"
+   home screen**. The next lab run resets it to "detailed" (what the first video shows) and no default step touches it any more.
+5. The lab's 10 Hz pulse was not part of this EXE; nothing here depends on it.
+
+Decision: **`0x95` at the end of the hold (then frames) becomes the default behaviour** (`GXOLED_OSD_RETURN_UI=0` restores
+the v0.5.1 behaviour for A/B). It is a documented, non-persistent command, independent of the Sonar flag. The Sonar flag is
+*not* set by the product: it is a persistent device setting that SteelSeries GG manages.
+
+Status: compiled and unit-tested (CI); **not yet verified on the DAC in the product build.** The confirmation package
+alternates control and fix three times each, with the Sonar flag set so that the long lock is reproducible.

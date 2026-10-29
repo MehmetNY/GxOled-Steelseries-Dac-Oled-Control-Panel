@@ -1,7 +1,8 @@
 # DAC ses-OSD ölçüm testi — adım adım (TR)
 
-Bu rehber, DAC ses düğmesini çevirdikten sonra GxOled'in ~6 sn geç dönmesinin **nerede** oluştuğunu
-ölçmek içindir. Test paketi bir **ölçüm aracıdır**, sorunu çözdüğünü iddia etmez.
+Bu rehber, DAC ses düğmesini çevirdikten sonra GxOled'in geç dönmesi sorununun **aday düzeltmesini**
+(bekleme bitiminde `0x95` + hemen kare) doğrulamak içindir. Paket düzeltmeyi eski davranışla yan yana ölçer;
+"çözüldü" kararını senin videon ve logun verir. (29 Ekim ölçümünün özeti 7. bölümde.)
 
 ## 1. Paketi nereden indireceksin?
 
@@ -22,7 +23,7 @@ Hazır paket, kaynak kodun yanında GitHub'da **ön-sürüm (pre-release)** olar
 `ZIP → sağ tık → Tümünü ayıkla...` → hedef olarak **`C:\gx-test`** yaz. ZIP'in içinden doğrudan çalıştırma.
 
 İçinde şunlar olmalı: `gxoled.exe`, `Test-VolumeOSD.ps1`, `1-OTOMATIK-TEST.cmd`, `2-Loglari-ac.cmd`,
-`BUILD-INFO.txt`, `BASLA-BURADAN.txt`.
+`3-GERCEK-KULLANIM-TESTI.cmd`, `BUILD-INFO.txt`, `BASLA-BURADAN.txt`.
 
 ## 3. Testi yap (otomatik, tek çift tık)
 
@@ -32,9 +33,14 @@ Ayrıntılı adımlar paketin içindeki **`BASLA-BURADAN.txt`** dosyasındadır 
 1. Çalışan GxOled'i tepsiden kapat.
 2. Telefonla OLED'i 1080p 60 fps **tek video** olarak kaydetmeye başla.
 3. `1-OTOMATIK-TEST.cmd` dosyasına çift tıkla.
-4. Saat ekrandayken 5 sn bekle, düğmeyi tek seferde 3-5 tık çevir, elini çek, saat dönene kadar bekle. **En az 10 kez** tekrarla; sağ alttaki sayının ilk hanesi deney numarasıdır ve kendiliğinden artar.
-5. Tepsiden "Çıkış" de (cihaz ayarları otomatik eski haline döner), videoyu durdur.
+4. Saat ekrandayken 5 sn bekle, düğmeyi tek seferde 3-5 tık çevir, elini çek, saat dönene kadar bekle,
+   **10 sn daha bekle**. **Toplam 6 kez** tekrarla; sağ alttaki sayının ilk hanesi deney numarasıdır (0-5)
+   ve kendiliğinden artar (çiftler: eski davranış / düzeltme).
+5. Tepsiden "Çıkış" de, videoyu durdur. Test başlarken DAC'ın ana ekranını "ayrıntılı" moda geri alır
+   (önceki deney "basit" yapmıştı).
 6. Videoyu ve en yeni `osd-default-lab-*.log` dosyasını (`2-Loglari-ac.cmd` klasörü açar) gönder.
+7. İsteğe bağlı: DAC'ın USB'sini 10 sn çek-tak, sonra `3-GERCEK-KULLANIM-TESTI.cmd` ile aynı şeyi sayaçsız,
+   normal kullanımda 10 çevirişle tekrarla.
 
 Sonuçları video + log'dan ben otomatik okuyorum; numara not etmen gerekmiyor.
 
@@ -52,10 +58,26 @@ Sonuçları video + log'dan ben otomatik okuyorum; numara not etmen gerekmiyor.
 üzerinde bugün de ~6 sn veriyor ve kaynak kodu karşılaştırınca **HID gönderim yöntemi birebir aynı**
 (iki 64 sütunluk 1024 baytlık feature report, komut 0x93). Yani sıfırdan yazılan bir sürüm de aynı cihaza aynı komutları gönderecekse aynı gecikmeyi görür.
 Videolu ölçüm bunu doğruladı: gecikme yazılımda değil, cihazın kendi ana ekranının kareleri
-~5-6 sn boyunca yok saymasında. Bu yüzden çözüm, cihazın kilidini açabilecek komutları aramaktır
-(yukarıdaki otomatik deney döngüsü); kodu yeniden yazmak bunu değiştirmez.
+~5-6 sn boyunca yok saymasında. Bu yüzden çözüm, cihazın kilidini açabilecek komutları aramaktı; kodu yeniden yazmak bunu değiştirmezdi.
+29 Ekim'de bu komut bulundu (`0x95`, 7. bölüm); şimdi ürün derlemesinde doğrulanıyor.
 
-## 6. Dokunulmayanlar
+## 6. Sonuçları kim okur?
+
+Video + log'u `scripts/analysis/analyze_osd_video.py VIDEO.mp4 LOG.log` ile otomatik okuyorum
+(ffmpeg + numpy gerekir); numara not etmen gerekmiyor.
+
+## 7. 29 Ekim ölçümünün özeti (lab, 300 sn video)
+
+| Deney | Yerel ekran, son dönüşten sonra |
+| --- | --- |
+| normal (kontrol) | 3,9-4,5 sn (Sonar bayrağı açıkken 3,6 sn) |
+| **bekleme bitiminde 0x95, sonra kareler** | **2,62-2,65 sn (5/5, üç farklı cihaz durumunda)** |
+| her dönüşte 0x95, bekleme yok (3000) | yerel ekran yalnızca 0,15-0,3 sn yanıp sönüyor; GxOled içeriği hemen geliyor |
+| 8000 (basit ana ekran, `0x89 01`) | DAC'ı basit arayüze geçirdi; geri alma adımı, bu cihazda ayar sorgusu çalışmadığı için atlandı |
+
+Ayrıntı ve sınırlar: [`VOLUME_OSD_DIAGNOSTICS.md`](VOLUME_OSD_DIAGNOSTICS.md) — "Sixth trial".
+
+## 8. Dokunulmayanlar
 
 `v0.5.1`, `v0.5.0` ve `stable` etiketleri/EXE'leri bu çalışmada değişmez. Düzeltme DAC üzerinde
 doğrulandıktan sonra, senin onayınla v0.5.1 üzerine yazılacaktır

@@ -19,9 +19,13 @@ What it does
      video time to log time and prints, per episode, the dial times, the experiment step (lab mode),
      the frame that ended the episode and the visible time measured from the first/last dial.
 
-Alignment: the first video frame of each episode lags the group's first dial report by a roughly
-constant amount (camera + display latency), so that constant is estimated as the median over all
-episodes. The ending frame is then the first log FRAME written at or after the episode's end.
+Alignment: the first video frame of each episode lags the first dial report of its burst by a
+roughly constant amount (camera + display latency, 2.1-2.9 s in the videos so far). That constant is
+found by searching for the shift that lines the long episodes up with the dial bursts of the log.
+Every episode (also short flashes) is then matched to the dial reports that fall inside it, so
+bursts the native screen merged, or turns whose screen was suppressed, do not confuse the pairing.
+The ending frame is the last log FRAME written before the episode ended; the frame before it was
+discarded by the device, which bounds how long the device's own lock lasted.
 """
 import json
 import re
@@ -166,47 +170,70 @@ def main():
         return 0
 
     dials, log_frames, groups = parse_log(log)
-    # Dial groups: a report >= 5 s after the previous one starts a group (the native screen lasts
-    # about 4.5-6 s after the last report, so a later report is a new episode in practice; the
-    # lab itself groups at 10 s, which merges nothing the video can tell apart because the user
-    # waits for the clock between turns).
-    gstarts, glasts = [], []
-    for t in dials:
-        if not glasts or t - glasts[-1] >= 5.0:
-            gstarts.append(t)
-            glasts.append(t)
-        else:
-            glasts[-1] = t
-    if not eps or not gstarts:
-        print("no episodes or no dial groups to align")
+    if not dials:
+        print("the log has no DIAL lines")
         return 1
-    # The recording usually starts while the stock screen is still up (before GxOled draws):
-    # drop leading episodes that have no dial group.
-    extra = max(0, len(eps) - len(gstarts))
-    if extra:
-        print(f"note: ignoring {extra} leading episode(s) that precede the first dial (stock screen at start)")
-        eps = eps[extra:]
-    pairs = min(len(eps), len(gstarts))
-    offset = float(np.median([eps[i][0] - gstarts[i] for i in range(pairs)]))
-    print(f"{len(gstarts)} dial group(s) in the log; video-start minus first-dial (median) = {offset:.3f} s")
-    if len(eps) != len(gstarts):
-        print(f"WARNING: {len(eps)} episodes in the video vs {len(gstarts)} dial groups in the log; aligning in order")
-    print(f"per-episode start offsets: {[round(float(eps[i][0] - gstarts[i]), 3) for i in range(pairs)]}")
-    labels = {round(t, 3): s for t, s in groups}
-    print()
-    print("group | step                 | video OSD s | visible after last dial s | ending frame (seq @ s after last dial)")
-    for i in range(pairs):
-        a, b = eps[i]
-        end_log = b - offset
-        later = [(t, seq, step) for t, seq, step in log_frames if t >= end_log - 0.15]
-        ending = later[0] if later else None
+    short_eps = episodes(times, flags, min_len=0.15)
+    long_eps = [e for e in short_eps if e[1] - e[0] >= 2.0]
+    if not long_eps:
+        print("no native-screen episode of 2 s or more to align with")
+        return 1
+    # Dial bursts: reports with no other report in the 3 s before them.
+    bursts = [t for i, t in enumerate(dials) if i == 0 or t - dials[i - 1] >= 3.0]
+    grid = np.arange(0.3, 8.0, 0.01)
+    cost = [sum(min(abs(a - o - b) for b in bursts) for a, _ in long_eps) for o in grid]
+    guess = float(grid[int(np.argmin(cost))])
+    near = [a - min(bursts, key=lambda b: abs(a - guess - b)) for a, _ in long_eps]
+    near = [v for v in near if abs(v - guess) < 0.4]
+    offset = float(np.median(near)) if near else guess
+    print(f"video-start minus first-dial (median of {len(near)} long episodes) = {offset:.3f} s; "
+          f"spread {max(near) - min(near):.2f} s" if near else f"offset guess {offset:.2f} s")
+
+    def step_at(t):
         label = "-"
-        for t, s in groups:
-            if abs(t - gstarts[i]) < 0.05:
-                label = s
-        visible_last = end_log - glasts[i]
-        end_txt = f"seq {ending[1]} @ {ending[0] - glasts[i]:.2f}" if ending else "n/a"
-        print(f"{i:5d} | {label:20s} | {b - a:11.2f} | {visible_last:25.2f} | {end_txt}")
+        for gt, step in groups:
+            if gt <= t + 0.01:
+                label = step
+        return label
+
+    rows = []
+    for a, b in short_eps:
+        inside = [t for t in dials if a - offset - 0.6 <= t <= b - offset + 0.2]
+        if not inside:
+            continue
+        first, last = inside[0], inside[-1]
+        end_log = b - offset
+        before = [(t, seq) for t, seq, _ in log_frames if last <= t < end_log - 0.02]
+        after = [(t, seq) for t, seq, _ in log_frames if t >= end_log - 0.02]
+        rows.append({
+            "a": a, "b": b, "first": first, "last": last, "n": len(inside), "step": step_at(first),
+            "dur": b - a, "vis_first": end_log - first, "vis_last": end_log - last,
+            "ending": before[-1] if before else None, "next": after[0] if after else None,
+            "discarded": before[:-1],
+        })
+    print()
+    print(" #  | step                   | video s..s      | dials | OSD s | after first | after last | frame that ended it (s after last dial) | discarded before it")
+    for i, r in enumerate(rows):
+        end_txt = f"seq {r['ending'][1]} @ {r['ending'][0] - r['last']:.2f}" if r["ending"] else "n/a"
+        disc = ", ".join(f"{t - r['last']:.2f}" for t, _ in r["discarded"]) or "-"
+        flash = "  (flash)" if r["dur"] < 1.0 else ""
+        print(f"{i:3d} | {r['step']:22s} | {r['a']:6.2f}..{r['b']:6.2f} | {r['n']:5d} | {r['dur']:5.2f} | {r['vis_first']:11.2f} | {r['vis_last']:10.2f} | {end_txt:39s} | {disc}{flash}")
+
+    print()
+    print("per step (episodes of 1 s or more; 'flashes' are native screens shorter than 1 s)")
+    print("step                   | n | visible after last dial: min / median / max s | flashes")
+    order = []
+    for r in rows:
+        if r["step"] not in order:
+            order.append(r["step"])
+    for step in order:
+        mine = [r for r in rows if r["step"] == step]
+        longs = [r["vis_last"] for r in mine if r["dur"] >= 1.0]
+        flashes = sum(1 for r in mine if r["dur"] < 1.0)
+        if longs:
+            print(f"{step:22s} | {len(longs)} | {min(longs):.2f} / {float(np.median(longs)):.2f} / {max(longs):.2f}{'':26s} | {flashes}")
+        else:
+            print(f"{step:22s} | 0 | no native screen of 1 s or more{'':16s} | {flashes}")
     return 0
 
 

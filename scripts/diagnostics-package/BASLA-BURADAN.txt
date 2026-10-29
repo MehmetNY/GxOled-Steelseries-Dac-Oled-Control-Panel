@@ -1,84 +1,79 @@
-GxOled — SES (VOLUME) OSD OTOMATİK DENEY PAKETİ
-===============================================
+GxOled — SES (VOLUME) OSD DOĞRULAMA PAKETİ
+==========================================
 
 NE İŞE YARAR?
 -------------
-Önceki ölçümler (senin videoların + loglar) şunu kanıtladı:
-  * DAC düğmesi çevrilince cihaz kendi ana ekranını açıyor ve yaklaşık 5-6 saniye
-    boyunca GxOled'in gönderdiği TÜM kareleri yok sayıyor (kareler gecikmeli
-    gösterilmiyor, tamamen atılıyor).
-  * Yazılımdaki zamanlamayla bunu kısaltmak mümkün değil; cihazın kilidini
-    açabilecek komutlar gerekiyor.
-Bu paket, bu komutları SIRAYLA ve OTOMATİK dener. Sen sadece düğmeyi çevirirsin.
-Her çevirişte listedeki bir sonraki deney çalışır; sonucu videodan ben okurum.
+Önceki ölçümler (senin videoların + loglar) şunu gösterdi:
+  * DAC düğmesi çevrilince cihaz kendi ana ekranını açar ve yaklaşık 3,5 saniye
+    (kare aralığına göre uçtan uca 4-6 sn) boyunca GxOled'in gönderdiği TÜM
+    kareleri yok sayar; kareler gecikmeli gösterilmiyor, tamamen atılıyor.
+  * 2,5 sn bekleme bittiğinde GxOled'in ilk karesinden HEMEN ÖNCE cihaza
+    "SteelSeries arayüzüne dön" (0x95) komutu gönderilirse, ilk kare kabul
+    ediliyor: yerel ekran son dönüşten ~2,6 sn sonra kapanıyor (5/5 deneme).
+Bu paketteki gxoled.exe bu aday düzeltmeyi VARSAYILAN olarak içerir.
 
-BU PAKET SORUNU ÇÖZDÜĞÜNÜ İDDİA ETMEZ. Hangi deneyin işe yaradığını bulur.
+Bu paket düzeltmeyi YENİDEN, bu kez eski davranışla yan yana ölçer.
+BU PAKET "SORUN ÇÖZÜLDÜ" DEMEZ: o kararı senin videon ve logun verir.
 Mevcut v0.5.1 / v0.5.0 / stable sürümlerine dokunmaz.
 
 
 PAKETİN İÇİ
 -----------
-  gxoled.exe            : deney özellikli GxOled
-  Test-VolumeOSD.ps1    : testi başlatan betik (elleme)
-  1-OTOMATIK-TEST.cmd   : TEK ÇİFT TIK — otomatik deney döngüsü
-  2-Loglari-ac.cmd      : kayıt (log) klasörünü açar
-  BUILD-INFO.txt        : EXE'nin kaynak commit'i ve SHA-256 değeri
-  BASLA-BURADAN.txt     : bu rehber
+  gxoled.exe                   : aday düzeltmeli GxOled
+  Test-VolumeOSD.ps1           : testi başlatan betik (elleme)
+  1-OTOMATIK-TEST.cmd          : ANA TEST — 6 çevirişlik karşılaştırma
+  2-Loglari-ac.cmd             : kayıt (log) klasörünü açar
+  3-GERCEK-KULLANIM-TESTI.cmd  : isteğe bağlı — normal kullanımda doğrulama
+  BUILD-INFO.txt               : EXE'nin kaynak commit'i ve SHA-256 değeri
+  BASLA-BURADAN.txt            : bu rehber
 
 
-YAPACAKLARIN (toplam ~5 dakika)
--------------------------------
+ANA TEST (1-OTOMATIK-TEST.cmd) — yaklaşık 3 dakika
+--------------------------------------------------
 1) ZIP'i kısa bir klasöre çıkar: sağ tık -> "Tümünü ayıkla" -> C:\gx-test
    (ZIP'in içinden çalıştırma.)
 
 2) Çalışan GxOled varsa kapat: tepsideki GxOled simgesine sağ tık -> "Çıkış".
-   (Görev Yöneticisi -> Ayrıntılar'da gxoled.exe / ggoled.exe kalmamalı.)
 
-3) Telefonu OLED'e sabitle, 1080p 60 fps VİDEOYU BAŞLAT. Tek video yeter,
-   test boyunca kesintisiz çek. Sağ alt köşedeki sayı okunabilsin.
-   Müzik/video çalmasın (medya kapalı).
+3) Telefonu OLED'e sabitle, 1080p 60 fps VİDEOYU BAŞLAT; test boyunca kesintisiz
+   çek. Sağ alt köşedeki sayı okunabilsin. Müzik/video çalmasın.
 
-4) C:\gx-test içinde  1-OTOMATIK-TEST.cmd  dosyasına çift tıkla.
-   SmartScreen çıkarsa "Ek bilgi" -> "Yine de çalıştır".
+4) 1-OTOMATIK-TEST.cmd dosyasına çift tıkla. SmartScreen çıkarsa
+   "Ek bilgi" -> "Yine de çalıştır".
 
-5) OLED'de saat görünür; sağ alt köşede 4 haneli bir sayı vardır:
-       X YYY   X = sıradaki deney numarası (0-9), YYY = kare sayacı.
-   Saat ekranda iken 5 saniye bekle, sonra DAC düğmesini TEK SEFERDE 3-5 tık çevir,
-   elini çek ve düğmeye dokunma. Orijinal ekran gelir; saat geri dönene kadar bekle.
+5) OLED'de saat görünür; sağ alt köşedeki 4 haneli sayının İLK hanesi deney
+   numarasıdır (0..5). Saat ekranda iken 5 sn bekle, DAC düğmesini TEK SEFERDE
+   3-5 tık çevir, elini çek. Saat geri gelince en az 10 sn bekle.
 
-6) Aynı şeyi (5. adım) EN AZ 10 KEZ tekrarla. Her seferinde deney numarası
-   (sayının ilk hanesi) kendiliğinden artar: 0,1,2,...,9. İstersen 20 kez yap
-   (ikinci tur tekrarlanabilirliği gösterir).
-   Saat geri geldikten sonra en az 5 sn beklemeyi unutma.
+6) 5. adımı TOPLAM 6 KEZ yap (numara 0,1,2,3,4,5 olarak kendiliğinden ilerler).
 
-7) Bitince tepsi simgesine sağ tık -> "Çıkış". Cihaz ayarları otomatik eski
-   haline getirilir. Videoyu durdur.
+7) Bitince tepsi simgesine sağ tık -> "Çıkış". Videoyu durdur.
 
-8) Bana gönder:
-     a) videoyu (olduğu gibi),
-     b) 2-Loglari-ac.cmd ile açılan klasördeki EN YENİ  osd-default-lab-*.log
-        dosyasını.
+8) Bana gönder: videoyu (olduğu gibi) + 2-Loglari-ac.cmd ile açılan klasördeki
+   EN YENİ  osd-default-lab-*.log  dosyası.
+
+Deneyler:
+  0 sonar-on          eski davranış (kontrol): 2,5 sn bekle, sonra kareler
+  1 sonar-on+ui-at-end düzeltme: bekleme bitince 0x95, sonra kareler
+  2 sonar-on+base     kontrol
+  3 sonar-on+ui-at-end düzeltme
+  4 sonar-on+base     kontrol
+  5 sonar-on+ui-at-end düzeltme
+Beklenti (ölçümlere göre; henüz doğrulanmadı): kontrol 3,5-4,5 sn, düzeltme ~2,6 sn.
+
+Bu test başlarken DAC'ın ana ekranını "ayrıntılı" moda geri alır: önceki
+deney (8 numaralı) onu "basit" yapmıştı ve bu cihazda ayar sorgusu çalışmadığı
+için geri alma adımı atlanmıştı. İstersen DAC menüsünden de elle ayarlayabilirsin.
+"Sonar mevcut" bayrağı açık kalır; GxOled'in aday düzeltmesi bayraktan bağımsızdır.
 
 
-DENEYLER (merak edersen) — hepsi cihazın kendi protokolündeki komutlardır
--------------------------------------------------------------------------
-  0 base                  normal davranış (kontrol ölçümü)
-  1 ui-at-dial            düğmeyle birlikte "SteelSeries arayüzüne dön" (0x95)
-  2 ui-at-end             2,5 sn bekleme bitince 0x95
-  3 ui-then-frames        her dönüşte 0x95, hemen ardından kareler (bekleme yok)
-  4 sonar-on              cihaza "Sonar mevcut" bayrağı (0x8d=1)
-  5 sonar-on+base         bayrak açıkken normal davranış
-  6 sonar-on+ui-at-end    bayrak açıkken 0x95
-  7 sonar-off             bayrağı kapat (0x8d=0)
-  8 home-simple           ana ekran tipi "basit" (0x89=1)
-  9 home-restore          ana ekran tipini eski haline getir
-
-NOT 1: "sonar-on" deneyleri sırasında DAC düğmesi Windows ses seviyesini geçici
-olarak farklı davranabilir; döngü 7. deneyde bayrağı kapatır, çıkışta da
-yazılım her şeyi eski haline getirir. Bir şey takılı kalırsa DAC'ın USB ve güç
-kablosunu 30 saniye çek-tak: ayarlar eski haline döner.
-NOT 2: Başlangıçta cihazdan ayarları (ekran zaman aşımı, parlaklık, ana ekran
-tipi, Sonar bayrağı) OKUYORUZ; log'da UX_SETTINGS satırı olarak görünür.
+İSTEĞE BAĞLI: 3-GERCEK-KULLANIM-TESTI.cmd
+-----------------------------------------
+DAC'ın USB kablosunu 10 sn çek-tak (cihaz yeniden başlar; "Sonar" bayrağı gibi
+geçici ayarların sıfırlanıp sıfırlanmadığı henüz bilinmiyor, bu test onu da gösterir),
+sonra bu dosyayı çalıştır. Ekranda sayaç olmaz, GxOled normal çalışır. Düğmeyi 10 kez çevir
+(1 tık, 5 tık, uzun çevirme karışık), her seferinde saat gelene +5 sn bekle,
+kaydet ve videoyla logu (osd-default-*.log) gönder.
 
 
 SORUN GİDERME
@@ -86,5 +81,4 @@ SORUN GİDERME
 * "Another GxOled/ggoled instance is running": tepsiden GxOled'e sağ tık -> Çıkış.
 * gxoled.exe bulunamadı: ZIP'i tam ayıklamadın veya antivirüs karantinaya aldı.
 * Köşede sayı yok: yanlış/eski EXE çalışıyor; BUILD-INFO.txt'yi kontrol et.
-* Düğme çevrilince hiçbir şey olmuyor / ses seviyesi değişmiyor: bir deney
-  bayrağı takılmış olabilir; ADIM 7'deki gibi çıkış yap, olmazsa çek-tak.
+* Bir şey takılı kalırsa DAC'ın USB kablosunu 30 sn çek-tak (geçici ayarlar büyük olasılıkla sıfırlanır).

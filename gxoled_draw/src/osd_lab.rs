@@ -105,7 +105,25 @@ impl LabStep {
     }
 }
 
+/// The 2026-10-29 lab (ten experiments, see `docs/VOLUME_OSD_DIAGNOSTICS.md`) found that `0x95`
+/// right before the first frame ends the native screen at the end of the hold. This list is the
+/// confirmation run: with the Sonar flag set (the state in which the long native screen shows up)
+/// it alternates the old behaviour (`sonar-on`, `sonar-on+base`) with the fix (`ui-at-end`), three
+/// knob turns each, so one session answers "does it still work, and is it better than before?".
 pub fn default_steps() -> Vec<LabStep> {
+    vec![
+        LabStep::SonarOn,
+        LabStep::SonarOnUiAtEnd,
+        LabStep::SonarOnBase,
+        LabStep::SonarOnUiAtEnd,
+        LabStep::SonarOnBase,
+        LabStep::SonarOnUiAtEnd,
+    ]
+}
+
+/// Every experiment the lab knows, for ad-hoc sessions (not run by default).
+#[allow(dead_code)]
+pub fn all_steps() -> Vec<LabStep> {
     vec![
         LabStep::Base,
         LabStep::UiAtDial,
@@ -225,7 +243,7 @@ mod tests {
     #[test]
     fn dial_reports_within_ten_seconds_belong_to_one_group() {
         let t0 = Instant::now();
-        let mut lab = OsdLab::new(default_steps());
+        let mut lab = OsdLab::new(all_steps());
         let a = lab.on_dial(t0);
         assert!(a.new_group);
         assert_eq!((a.group, a.step), (0, LabStep::Base));
@@ -242,7 +260,7 @@ mod tests {
     #[test]
     fn steps_cycle_after_the_last_one() {
         let t0 = Instant::now();
-        let steps = default_steps();
+        let steps = all_steps();
         let n = steps.len();
         let mut lab = OsdLab::new(steps.clone());
         let mut now = t0;
@@ -286,13 +304,27 @@ mod tests {
     #[test]
     fn stamp_digit_announces_the_next_step_while_idle() {
         let t0 = Instant::now();
-        let mut lab = OsdLab::new(default_steps());
+        let mut lab = OsdLab::new(all_steps());
         assert_eq!(lab.stamp_digit(t0), 0);
         lab.on_dial(t0);
         assert_eq!(lab.stamp_digit(at(t0, 3.0)), 0); // group in progress: step 0
         assert_eq!(lab.stamp_digit(at(t0, 11.0)), 1); // idle: next step is 1
         lab.on_dial(at(t0, 12.0));
         assert_eq!(lab.stamp_digit(at(t0, 13.0)), 1);
+    }
+
+    #[test]
+    fn default_run_alternates_old_behaviour_and_the_fix_with_the_sonar_flag_set() {
+        let steps = default_steps();
+        assert_eq!(steps.first(), Some(&LabStep::SonarOn));
+        assert_eq!(steps.first().and_then(|s| s.pre()), Some(LabPre::SonarOn));
+        // Only the first step has a pre-action; every later one inherits the flag.
+        assert!(steps.iter().skip(1).all(|s| s.pre().is_none()));
+        let fixed = steps.iter().filter(|s| s.ui_at_hold_end()).count();
+        let control = steps.iter().filter(|s| !s.ui_at_hold_end()).count();
+        assert_eq!((fixed, control), (3, 3));
+        // No default step touches the home screen type any more.
+        assert!(steps.iter().all(|s| !matches!(s, LabStep::HomeSimple | LabStep::HomeRestore)));
     }
 
     #[test]
@@ -306,5 +338,6 @@ mod tests {
         assert_eq!(LabStep::SonarOff.pre(), Some(LabPre::SonarOff));
         assert_eq!(LabStep::Base.pre(), None);
         assert!(default_steps().len() <= 10, "the stamp shows the step as one digit");
+        assert!(all_steps().len() <= 10, "the stamp shows the step as one digit");
     }
 }
