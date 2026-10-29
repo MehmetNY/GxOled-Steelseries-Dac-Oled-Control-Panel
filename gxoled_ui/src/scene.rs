@@ -179,20 +179,25 @@ impl Scene {
         );
     }
 
-    /// Soft drop shadow under a rounded rect (cheap: one blurred rect).
+    /// Soft drop shadow under a rounded rect. A few stacked, slightly larger translucent rects approximate the
+    /// blur: a real `feGaussianBlur` per card costs more than the rest of the frame put together.
     pub fn shadow(&mut self, r: Rect, rx: f32, blur: f32, dy: f32, color: &str, opacity: f32) {
-        self.clip_seq += 1;
-        let id = format!("sh{}", self.clip_seq);
-        let _ = write!(
-            self.defs,
-            r#"<filter id="{id}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="{}"/></filter>"#,
-            n(blur)
-        );
-        let _ = write!(
-            self.body,
-            r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" fill="{}" fill-opacity="{}" filter="url(#{id})"/>"#,
-            n(r.x), n(r.y + dy), n(r.w), n(r.h), n(rx), color, n(opacity)
-        );
+        const LAYERS: u32 = 4;
+        for i in 1..=LAYERS {
+            let t = i as f32 / LAYERS as f32;
+            let grow = blur * t;
+            let _ = write!(
+                self.body,
+                r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" fill="{}" fill-opacity="{}"/>"#,
+                n(r.x - grow),
+                n(r.y - grow + dy),
+                n(r.w + 2.0 * grow),
+                n(r.h + 2.0 * grow),
+                n(rx + grow),
+                color,
+                n(opacity / LAYERS as f32 * 0.6)
+            );
+        }
     }
 
     pub fn circle(&mut self, cx: f32, cy: f32, r: f32, fill: &str) {

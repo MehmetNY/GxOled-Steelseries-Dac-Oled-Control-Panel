@@ -45,11 +45,19 @@ pub fn nav_label(page: Page, tr: bool) -> &'static str {
     }
 }
 
-/// Draws sidebar + header over the whole window (not scrolled). `w`/`h` are the client size in du.
-pub fn shell(c: &mut Ctx, w: f32, h: f32) {
+/// Window background: the shell colour everywhere with the content area inset. Drawn first.
+pub fn backdrop(c: &mut Ctx, w: f32, h: f32) {
     let (shell, content) = (c.p.shell, c.p.content);
     c.sc.rect(Rect::new(0.0, 0.0, w, h), 0.0, shell);
     c.sc.rect(Rect::new(SIDEBAR_W, HEADER_H, w - SIDEBAR_W, h - HEADER_H), 0.0, content);
+}
+
+/// Sidebar and header strip. Drawn *after* the scrolling content, which slides underneath them: painting an
+/// opaque L-shaped frame over it is several times cheaper than rasterising the content through a clip group.
+pub fn front(c: &mut Ctx, w: f32, h: f32) {
+    let shell = c.p.shell;
+    c.sc.rect(Rect::new(0.0, 0.0, SIDEBAR_W, h), 0.0, shell);
+    c.sc.rect(Rect::new(SIDEBAR_W, 0.0, (w - SIDEBAR_W).max(0.0), HEADER_H), 0.0, shell);
     sidebar(c, h);
     header(c, w);
 }

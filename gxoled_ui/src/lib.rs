@@ -211,15 +211,14 @@ impl Ui {
                 ix: Interaction { hover: self.hover, pressed: self.pressed, focus: self.focus, focus_visible: self.focus_visible },
                 list_first: self.list_first,
             };
-            chrome::shell(&mut c, w, h);
             let viewport = Rect::new(SIDEBAR_W, HEADER_H, w - SIDEBAR_W, h - HEADER_H);
-            c.sc.begin_clip(viewport, 0.0);
+            chrome::backdrop(&mut c, w, h);
             c.sc.begin_translate(0.0, -self.scroll);
             c.sc.in_scroll = true;
             let built = pages::build(&mut c, &layout);
             c.sc.in_scroll = false;
             c.sc.end_group();
-            c.sc.end_group();
+            chrome::front(&mut c, w, h);
             let content_h = built.bottom + CONTENT_BOTTOM_PAD - HEADER_H;
             let max_scroll = (content_h - viewport.h).max(0.0);
             if self.scroll > max_scroll + 0.5 && pass < 3 {
