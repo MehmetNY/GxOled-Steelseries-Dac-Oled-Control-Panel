@@ -3,6 +3,13 @@
 mod os;
 #[cfg(target_os = "windows")]
 mod settings_window;
+// Beta (v0.5.3): modern settings windows. `settings_window` (classic) stays the default-safe fallback.
+#[cfg(target_os = "windows")]
+mod modern_window;
+#[cfg(target_os = "windows")]
+mod modern_ui;
+#[cfg(target_os = "windows")]
+mod settings_ui;
 #[cfg(target_os = "windows")]
 mod go_bridge;
 
@@ -99,6 +106,25 @@ enum ConfigUiMode {
     Hybrid,
 }
 
+/// Beta: which settings window the tray / settings button opens. Both always exist in the binary; only this
+/// setting (and the automatic fallbacks in `settings_ui`) decide, so going back is one click.
+#[cfg(target_os = "windows")]
+#[derive(Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq, Debug)]
+enum ConfigUiStyle {
+    #[default]
+    Modern,
+    Classic,
+}
+
+/// "0.5.3-beta" -> "0.5.3 Beta" (for labels); other versions are shown unchanged.
+fn display_version() -> String {
+    let v = env!("CARGO_PKG_VERSION");
+    match v.strip_suffix("-beta") {
+        Some(base) => format!("{base} Beta"),
+        None => v.to_owned(),
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 enum GoAnimation { Matrix, Hyperspace, StarWars, GameOfLife }
 impl GoAnimation {
@@ -165,6 +191,9 @@ struct Config {
     time_mode: ConfigTimeMode,
     clock_style: ConfigClockStyle,
     ui_mode: ConfigUiMode,
+    // Beta: modern or classic settings window (older config files simply lack this key).
+    #[cfg(target_os = "windows")]
+    ui_style: ConfigUiStyle,
     language: ConfigLanguage,
     theme: ConfigTheme,
     go_animation: Option<GoAnimation>,
@@ -198,6 +227,8 @@ impl Default for Config {
             time_mode: ConfigTimeMode::default(),
             clock_style: ConfigClockStyle::default(),
             ui_mode: ConfigUiMode::default(),
+            #[cfg(target_os = "windows")]
+            ui_style: ConfigUiStyle::default(),
             language: ConfigLanguage::default(),
             theme: ConfigTheme::default(),
             go_animation: None,
@@ -894,6 +925,8 @@ enum MenuEvent {
     #[cfg(target_os = "windows")]
     SetUiMode(ConfigUiMode),
     #[cfg(target_os = "windows")]
+    SetUiStyle(ConfigUiStyle),
+    #[cfg(target_os = "windows")]
     SetLanguage(ConfigLanguage),
     #[cfg(target_os = "windows")]
     SetTheme(ConfigTheme),
@@ -1057,6 +1090,36 @@ fn main() {
         config.startup = migrate_legacy_windows_startup()
             .unwrap_or_else(|_| windows_startup_enabled().unwrap_or(config.startup));
     }
+    #[cfg(target_os = "windows")]
+    {
+        // Beta safety net. `--classic-ui` / `--modern-ui` force a style (and remember it); a previous modern start
+        // that never reached its first paint also falls back to the classic window.
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let before = config.ui_style;
+        if args.iter().any(|a| a == "--classic-ui") {
+            config.ui_style = ConfigUiStyle::Classic;
+        } else if args.iter().any(|a| a == "--modern-ui") {
+            config.ui_style = ConfigUiStyle::Modern;
+        }
+        if settings_ui::previous_start_failed() && config.ui_style == ConfigUiStyle::Modern {
+            config.ui_style = ConfigUiStyle::Classic;
+            let turkish = config.language == ConfigLanguage::Turkish;
+            MessageDialog::new()
+                .set_level(MessageLevel::Warning)
+                .set_title("GxOled")
+                .set_description(if turkish {
+                    "Modern (Beta) arayüz geçen sefer düzgün açılamadı; GxOled klasik arayüze döndü.\nTepsi menüsündeki 'Ayar penceresi biçimi (Beta)' ile tekrar deneyebilirsiniz."
+                } else {
+                    "The modern (Beta) interface did not start properly last time, so GxOled went back to the classic one.\nYou can try it again from the tray menu: 'Settings window style (Beta)'."
+                })
+                .show();
+        }
+        if config.ui_style != before {
+            if let Err(err) = config.save() {
+                eprintln!("Could not save the settings window style: {err}");
+            }
+        }
+    }
     // Retain the GIF path but load frames only when playback is active. A stopped
     // animation must not hold thousands of decoded frames in RAM.
     if config.go_animation.is_some() { config.animation_playing = false; }
@@ -1082,7 +1145,7 @@ fn main() {
     assert!(!menu.is_null());
     let (menu_tx, menu_rx) = mpsc::channel::<MenuEvent>();
 
-    let version_label = format!("GxOled Advanced v{}\0", env!("CARGO_PKG_VERSION"));
+    let version_label = format!("GxOled Advanced v{}\0", display_version());
     unsafe {
         let tm_version = sdl::SDL_InsertTrayEntryAt(menu, -1, version_label.as_ptr().cast(), sdl::SDL_TRAYENTRY_BUTTON);
         sdl::SDL_SetTrayEntryEnabled(tm_version, false);
@@ -1273,15 +1336,21 @@ fn main() {
         config.ui_mode, &menu_tx, MenuEvent::SetUiMode,
     );
     #[cfg(target_os = "windows")]
-    if let Err(err)=settings_window::create(menu_tx.clone()) {
+    let tm_ui_style_radio = RadioMenu::new(
+        menu, c"Settings window style (Beta)",
+        &[(c"Modern (Beta)",ConfigUiStyle::Modern),(c"Classic",ConfigUiStyle::Classic)],
+        config.ui_style, &menu_tx, MenuEvent::SetUiStyle,
+    );
+    #[cfg(target_os = "windows")]
+    if let Err(err)=settings_ui::create(menu_tx.clone(), &config) {
         eprintln!("GxOled settings window failed: {err}");
     }
     #[cfg(target_os = "windows")]
     {
-        settings_window::sync(&config);
-        settings_window::localize(config.language);
-        settings_window::set_theme(config.theme);
-        settings_window::install_tray_hook(config.ui_mode);
+        settings_ui::sync(&config);
+        settings_ui::localize(config.language);
+        settings_ui::set_theme(config.theme);
+        settings_ui::install_tray_hook(config.ui_mode);
         // Opening mode affects clicking the tray icon, not application startup.
     }
 
@@ -1344,6 +1413,11 @@ fn main() {
             ConfigUiMode::Tray=>set(*e,"Tray menu","Tepsi menüsü"),
             ConfigUiMode::Window=>set(*e,"Window","Pencere"),
             ConfigUiMode::Hybrid=>set(*e,"Hybrid","Karma"),
+        }}
+        set(tm_ui_style_radio.title,"Settings window style (Beta)","Ayar penceresi biçimi (Beta)");
+        for (e,value) in &tm_ui_style_radio.entries {match value {
+            ConfigUiStyle::Modern=>set(*e,"Modern (Beta)","Modern (Beta)"),
+            ConfigUiStyle::Classic=>set(*e,"Classic","Klasik"),
         }}
         set(tm_quit_mode_radio.title,"On app quit","Uygulama kapanırken");
         set(tm_quit,"Quit","Çıkış");
@@ -1418,7 +1492,7 @@ fn main() {
     let mut last_connect = Instant::now() - Duration::from_secs(1);
     let dev = loop {
         #[cfg(target_os = "windows")]
-        settings_window::poll();
+        settings_ui::poll();
         let mut event = sdl::SDL_Event::default();
         while unsafe { sdl::SDL_PollEvent(&mut event) } {
             if sdl::SDL_EventType(unsafe { event.r#type }) == sdl::SDL_EVENT_QUIT {
@@ -1429,25 +1503,32 @@ fn main() {
             match event {
                 MenuEvent::Quit => return,
                 #[cfg(target_os = "windows")]
-                MenuEvent::OpenSettings => settings_window::open(),
+                MenuEvent::OpenSettings => settings_ui::open(),
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetUiMode(mode) => {
                     config.ui_mode=mode;
                     tm_ui_radio.update_checked(mode);
-                    settings_window::set_tray_mode(mode);
+                    settings_ui::set_tray_mode(mode);
                     save_config(&config);
+                }
+                #[cfg(target_os = "windows")]
+                MenuEvent::SetUiStyle(style) => {
+                    config.ui_style=style;
+                    tm_ui_style_radio.update_checked(style);
+                    save_config(&config);
+                    settings_ui::set_style(style);
                 }
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetLanguage(language) => {
                     config.language = language;
-                    settings_window::localize(language);
+                    settings_ui::localize(language);
                     translate_tray(language);
                     save_config(&config);
                 }
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetTheme(theme) => {
                     config.theme = theme;
-                    settings_window::set_theme(theme);
+                    settings_ui::set_theme(theme);
                     save_config(&config);
                 }
                 MenuEvent::SetClockStyle(style) => {
@@ -1474,7 +1555,7 @@ fn main() {
             }
         }
         #[cfg(target_os = "windows")]
-        settings_window::sync(&config);
+        settings_ui::sync(&config);
         if last_connect.elapsed() >= Duration::from_secs(1) {
             last_connect = Instant::now();
             if let Ok(d) = Device::connect() {
@@ -1484,6 +1565,8 @@ fn main() {
         sleep(Duration::from_millis(10));
     };
     unsafe { sdl::SDL_SetTrayIcon(tray, icon.surf) };
+    #[cfg(target_os = "windows")]
+    settings_ui::set_connected(true);
     let mut dev = DrawDevice::new(dev, 30);
     if let Some((font_path, font_size)) = config.font.as_ref().map(|font| (font.path.clone(), font.size)) {
         match TextRenderer::load_from_file(&font_path, font_size) {
@@ -1530,7 +1613,7 @@ fn main() {
     dev.play();
     'main: loop {
         #[cfg(target_os = "windows")]
-        settings_window::poll();
+        settings_ui::poll();
         // Window event loop
         // TODO: handle system going to sleep
         let mut event = sdl::SDL_Event::default();
@@ -1583,13 +1666,20 @@ fn main() {
                     last_clock_shift_minute = None;
                 }
                 #[cfg(target_os = "windows")]
-                MenuEvent::OpenSettings => settings_window::open(),
+                MenuEvent::OpenSettings => settings_ui::open(),
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetUiMode(mode) => {
                     config.ui_mode = mode;
                     tm_ui_radio.update_checked(mode);
-                    settings_window::set_tray_mode(mode);
+                    settings_ui::set_tray_mode(mode);
                     config_updated = true;
+                }
+                #[cfg(target_os = "windows")]
+                MenuEvent::SetUiStyle(style) => {
+                    config.ui_style = style;
+                    tm_ui_style_radio.update_checked(style);
+                    config_updated = true;
+                    settings_ui::set_style(style);
                 }
                 #[cfg(target_os = "windows")]
                 MenuEvent::ToggleIdleFromWindow => {
@@ -1672,14 +1762,14 @@ fn main() {
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetLanguage(language) => {
                     config.language = language;
-                    settings_window::localize(language);
+                    settings_ui::localize(language);
                     translate_tray(language);
                     config_updated = true;
                 }
                 #[cfg(target_os = "windows")]
                 MenuEvent::SetTheme(theme) => {
                     config.theme = theme;
-                    settings_window::set_theme(theme);
+                    settings_ui::set_theme(theme);
                     config_updated = true;
                 }
                 MenuEvent::SetClockStyle(style) => {
@@ -1850,7 +1940,7 @@ fn main() {
 
         force_redraw |= config_updated;
         #[cfg(target_os = "windows")]
-        settings_window::sync(&config);
+        settings_ui::sync(&config);
 
         #[cfg(target_os = "windows")]
         {
@@ -1887,7 +1977,7 @@ fn main() {
                             if let Some(id)=notif_layer.take(){dev.remove_layer(id);}
                             go_layer=Some(dev.add_layer(layer));
                         }
-                        settings_window::preview(&bitmap);
+                        settings_ui::preview(&bitmap);
                         go_frame=Some(bitmap);
                     }
                 }
@@ -2146,9 +2236,9 @@ fn main() {
         #[cfg(target_os = "windows")]
         if time.second() != last_preview_second || force_redraw {
             last_preview_second=time.second();
-            if let Some(frame)=&go_frame {settings_window::preview(frame);}
+            if let Some(frame)=&go_frame {settings_ui::preview(frame);}
             else if config.clock_style == ConfigClockStyle::CasioF91W {
-                settings_window::preview(&gxoled_draw::casio_clock_preview(config.time_mode==ConfigTimeMode::H12,config.language==ConfigLanguage::Turkish));
+                settings_ui::preview(&gxoled_draw::casio_clock_preview(config.time_mode==ConfigTimeMode::H12,config.language==ConfigLanguage::Turkish));
             } else if config.time_mode!=ConfigTimeMode::Off {
                 let ts=Local::now().format("%H:%M:%S").to_string();
                 let bm=dev.render_lines_at_size(&ts,dev.text_size()).into_iter().next();
@@ -2156,7 +2246,7 @@ fn main() {
                     let mut preview=Bitmap::new(128,64,false);
                     let(x,y)=dev.center_bitmap(&bm);
                     preview.blit(&bm,x,y,false);
-                    settings_window::preview(&preview);
+                    settings_ui::preview(&preview);
                 }
             }
         }

@@ -251,7 +251,7 @@ impl UiSnapshot {
     }}
 }
 #[derive(Clone)]
-struct ProfileEntry { label:String, animation:GoAnimation, custom:Option<String> }
+pub(super) struct ProfileEntry { pub(super) label:String, pub(super) animation:GoAnimation, pub(super) custom:Option<String> }
 struct State {
     hwnd: usize,
     tabs: Vec<Vec<usize>>,
@@ -299,7 +299,7 @@ fn profile_name(a:super::GoAnimation)->&'static str {match a {
     super::GoAnimation::Matrix=>"matrix", super::GoAnimation::Hyperspace=>"hyperspace",
     super::GoAnimation::StarWars=>"starwars",super::GoAnimation::GameOfLife=>"life"
 }}
-fn profile_default(a:super::GoAnimation)->&'static str {match a {
+pub(super) fn profile_default(a:super::GoAnimation)->&'static str {match a {
     super::GoAnimation::Matrix=>PROFILE_MATRIX, super::GoAnimation::Hyperspace=>PROFILE_HYPERSPACE,
     super::GoAnimation::StarWars=>PROFILE_STARWARS, super::GoAnimation::GameOfLife=>PROFILE_LIFE
 }}
@@ -309,7 +309,7 @@ fn profile_path(a:super::GoAnimation)->Option<std::path::PathBuf> {
 
 
 
-fn custom_directory()->Option<std::path::PathBuf> {
+pub(super) fn custom_directory()->Option<std::path::PathBuf> {
     directories::BaseDirs::new().map(|base|base.config_dir().join("GxOled").join("profiles").join("custom"))
 }
 fn profile_kind_for_json(value:&serde_json::Value)->Option<GoAnimation> {
@@ -317,7 +317,7 @@ fn profile_kind_for_json(value:&serde_json::Value)->Option<GoAnimation> {
     match ty {"matrix"=>Some(GoAnimation::Matrix),"hyperspace"=>Some(GoAnimation::Hyperspace),
         "starwars_intro"=>Some(GoAnimation::StarWars),"game_of_life"=>Some(GoAnimation::GameOfLife),_=>None}
 }
-fn valid_profile_text(text:&str)->Result<GoAnimation,String> {
+pub(super) fn valid_profile_text(text:&str)->Result<GoAnimation,String> {
     if text.len()>65_536 {return Err("Profile exceeds 64 KiB".into());}
     let value:serde_json::Value=serde_json::from_str(text).map_err(|e|format!("Invalid JSON: {e}"))?;
     let kind=profile_kind_for_json(&value).ok_or("Unsupported animation widget")?;
@@ -328,7 +328,7 @@ fn valid_profile_text(text:&str)->Result<GoAnimation,String> {
     }
     Ok(kind)
 }
-fn profile_entries()->Vec<ProfileEntry>{
+pub(super) fn profile_entries()->Vec<ProfileEntry>{
     let mut entries=vec![
         ProfileEntry{label:"Matrix Rain — Default".into(),animation:GoAnimation::Matrix,custom:None},
         ProfileEntry{label:"Hyperspace — Default".into(),animation:GoAnimation::Hyperspace,custom:None},
@@ -356,11 +356,11 @@ fn chosen_profile()->Option<ProfileEntry> {
         if idx<0 {None} else {s.profile_entries.get(idx as usize).cloned()}
     }))
 }
-fn selected_profile_path(entry:&ProfileEntry)->Option<std::path::PathBuf>{
+pub(super) fn selected_profile_path(entry:&ProfileEntry)->Option<std::path::PathBuf>{
     if let Some(name)=&entry.custom {custom_directory().map(|p|p.join(name))}
     else {profile_path(entry.animation)}
 }
-fn unique_profile_name(kind:GoAnimation)->Option<(String,std::path::PathBuf)> {
+pub(super) fn unique_profile_name(kind:GoAnimation)->Option<(String,std::path::PathBuf)> {
     let dir=custom_directory()?;
     std::fs::create_dir_all(&dir).ok()?;
     for n in 1..1_000_000u32 {
@@ -384,7 +384,7 @@ fn refresh_profile_list(selected:Option<String>){
     }
     unsafe {SendMessageW(list,LB_SETCURSEL,idx,0);}
 }
-fn create_profile_from_text(text:&str)->Result<(GoAnimation,String),String>{
+pub(super) fn create_profile_from_text(text:&str)->Result<(GoAnimation,String),String>{
     let kind=valid_profile_text(text)?;
     let (name,path)=unique_profile_name(kind).ok_or("Unable to allocate profile filename")?;
     std::fs::write(&path,pretty_json(text)).map_err(|e|e.to_string())?;
@@ -610,7 +610,7 @@ fn update_labels(buttons:&[(u32,usize)], language:ConfigLanguage) {
 fn wide(s:&str)->Vec<u16> { s.encode_utf16().chain(Some(0)).collect() }
 // A classic Windows multi-line EDIT expects CRLF, whereas serde_json produces LF.
 fn win_edit_text(s:&str)->Vec<u16> { wide(&s.replace("\r\n", "\n").replace('\n', "\r\n")) }
-fn pretty_json(s:&str)->String {
+pub(super) fn pretty_json(s:&str)->String {
     serde_json::from_str::<serde_json::Value>(s)
         .ok().and_then(|v| serde_json::to_string_pretty(&v).ok())
         .unwrap_or_else(||s.to_owned())
@@ -867,7 +867,7 @@ fn paint_panels(dc:Handle, s:&State,cw:i32,ch:i32){
         if s.page!=5 {
             draw_label(dc,"SteelSeries  •  128 x 64",
                 &Rect{left:p_x,top:346,right:cw-18,bottom:374},muted,false);
-            draw_label(dc,"GxOled Advanced v0.5.2",
+            draw_label(dc,"GxOled Advanced v0.5.3 Beta",
                 &Rect{left:p_x,top:395,right:cw-20,bottom:422},muted,false);
             rounded(dc,&Rect{left:p_x-4,top:458,right:cw-25,bottom:555},
                 if dark{color(30,35,43)}else{color(240,249,248)},border,16);
@@ -1281,6 +1281,17 @@ pub fn open() {
         }
     }
 }
+/// Whether the classic settings window is currently on screen (used by the beta style switch).
+pub fn is_visible() -> bool {
+    let hwnd = STATE.get().and_then(|state| state.lock().ok().map(|s| s.hwnd));
+    hwnd.is_some_and(|h| unsafe { IsWindowVisible(h as Handle) } != 0)
+}
+pub fn hide() {
+    let hwnd = STATE.get().and_then(|state| state.lock().ok().map(|s| s.hwnd));
+    if let Some(hwnd) = hwnd {
+        unsafe { ShowWindow(hwnd as Handle, SW_HIDE); }
+    }
+}
 pub fn sync(config:&Config){
     let mode_id=match config.ui_mode{ConfigUiMode::Tray=>300,ConfigUiMode::Window=>301,ConfigUiMode::Hybrid=>302};
     let style_id=match config.clock_style{ConfigClockStyle::DigitalOriginal=>310,ConfigClockStyle::DigitalBold=>311,
@@ -1368,18 +1379,18 @@ pub fn preview(bitmap:&gxoled_lib::Bitmap) {
     }
 }
 
-fn open_github() {
+pub(super) fn open_github() {
     let url=wide("https://github.com/MehmetNY/GxOled-v0.4.0");
     let op=wide("open");
     unsafe { ShellExecuteW(ptr::null_mut(),op.as_ptr(),url.as_ptr(),ptr::null(),ptr::null(),1); }
 }
-fn open_kofi() {
+pub(super) fn open_kofi() {
     let url=wide("https://ko-fi.com/");
     let op=wide("open");
     unsafe { ShellExecuteW(ptr::null_mut(),op.as_ptr(),url.as_ptr(),ptr::null(),ptr::null(),1); }
 }
 
-fn profile_error(title:&str,message:&str){
+pub(super) fn profile_error(title:&str,message:&str){
     let name=wide(title);let content=wide(message);
     unsafe {MessageBoxW(ptr::null_mut(),content.as_ptr(),name.as_ptr(),0x10);}
 }
@@ -1481,7 +1492,7 @@ fn open_profile_editor(){
     let content=std::fs::read_to_string(&target).unwrap_or_else(|_|profile_default(entry.animation).to_owned());
     open_profile_editor_with(entry,target,pretty_json(&content));
 }
-fn open_profile_editor_with(entry:ProfileEntry,target:std::path::PathBuf,content:String){
+pub(super) fn open_profile_editor_with(entry:ProfileEntry,target:std::path::PathBuf,content:String){
     if let Some(lock) = EDITOR.get() {
         let handles = if let Ok(mut ed) = lock.lock() {
             ed.animation = entry.animation;
@@ -1566,6 +1577,6 @@ fn decode_qr_png(contents:&[u8])->Result<(u32,u32,Vec<u32>),String>{
 }
 /// The publisher-provided QR is bundled in the binary, not chosen by the end user.
 /// Legacy per-user donation-qr.png overrides are intentionally ignored.
-fn load_embedded_qr()->Option<(u32,u32,Vec<u32>)>{
+pub(super) fn load_embedded_qr()->Option<(u32,u32,Vec<u32>)>{
     decode_qr_png(include_bytes!("../assets/donation-usdt-tron.png")).ok()
 }
