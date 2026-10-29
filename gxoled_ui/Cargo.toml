@@ -1,0 +1,10 @@
+[package]
+name = "gxoled_ui"
+version.workspace = true
+edition = "2024"
+description = "GxOled modern settings UI: SVG scene + resvg software renderer, no GPU or WebView needed"
+license = "GPL-3.0-only"
+
+[dependencies]
+# Pure-Rust renderer. `text` brings rustybuzz shaping + kerning; fonts are embedded, system fonts are NOT loaded.
+resvg = { version = "0.49", default-features = false, features = ["text"] }

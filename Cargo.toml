@@ -5,6 +5,7 @@ members = [
     "gxoled_lib",
     "gxoled_draw",
     "gxoled_app",
+    "gxoled_ui",
 ]
 
 [workspace.package]
