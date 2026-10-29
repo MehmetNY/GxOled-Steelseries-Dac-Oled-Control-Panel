@@ -1,0 +1,96 @@
+name: Release (Beta)
+# Pushing a branch named release/v<version>-beta builds the Windows EXE and publishes the GitHub PRE-RELEASE
+# v<version>-beta (never marked "latest"). The version comes from the workspace Cargo.toml and must end in
+# "-beta". An existing tag or release is never overwritten, and the stable workflow (release.yml, branches
+# release/v*-advanced) is not involved: stable, v0.5.0, v0.5.1, v0.5.2 and main are not touched by this file.
+on:
+  push:
+    branches:
+      - 'release/v*-beta'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gxoled-release-beta-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ''
+      - name: Read version and verify the branch, the classic UI and the modern UI sources
+        shell: pwsh
+        run: |
+          $manifest = Get-Content Cargo.toml -Raw
+          $m = [regex]::Match($manifest, '(?ms)\[workspace\.package\].*?^version\s*=\s*"([^"]+)"')
+          if (-not $m.Success) { throw 'workspace version not found in Cargo.toml' }
+          $version = $m.Groups[1].Value
+          if ($version -notmatch '^\d+\.\d+\.\d+-beta$') { throw "Beta workflow needs a version like 1.2.3-beta, found $version" }
+          if ($env:GITHUB_REF_NAME -like 'release/*' -and $env:GITHUB_REF_NAME -ne "release/v$version") {
+            throw "Branch $env:GITHUB_REF_NAME does not match Cargo.toml version $version (expected release/v$version)"
+          }
+          # The classic window must still be the original one (the beta only adds a second window next to it).
+          $ui = Get-Content gxoled_app/src/settings_window.rs -Raw
+          foreach ($marker in @('GENERAL CONTROL','CLOCK GALLERY','LIVE OLED','MONOCHROME')) {
+            if (-not $ui.Contains($marker)) { throw "Classic UI marker missing: $marker" }
+          }
+          if ($ui.Contains('OLED CONTROL CENTER')) { throw 'Unwanted redesigned classic UI detected' }
+          foreach ($file in @('gxoled_app/src/modern_window.rs','gxoled_app/src/modern_ui.rs','gxoled_app/src/settings_ui.rs','gxoled_ui/Cargo.toml','THIRD_PARTY_NOTICES.md')) {
+            if (-not (Test-Path $file)) { throw "Missing beta file: $file" }
+          }
+          if (-not (Test-Path go_animations/gxoled-animations.exe)) { throw 'Embedded Go renderer missing' }
+          $human = $version -replace '-beta$', ' Beta'
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HUMAN=$human" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Cargo check
+        run: cargo check --locked -p gxoled_app --features sdl3-static
+      - name: Regression tests
+        run: cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw -p gxoled_ui --features gxoled_app/sdl3-static
+      - name: Build Windows beta EXE
+        run: cargo build --locked --release -p gxoled_app --features sdl3-static
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $name = "GxOled Advanced v$env:HUMAN.exe"
+          Copy-Item target/release/gxoled.exe "release/$name"
+          Copy-Item THIRD_PARTY_NOTICES.md release/THIRD_PARTY_NOTICES.md
+          $sha = (Get-FileHash "release/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $name" | Set-Content release/SHA256SUMS.txt -Encoding ascii
+          $text = Get-Content CHANGELOG.md -Raw
+          $entry = [regex]::Match($text, "(?ms)^## GxOled Advanced v$([regex]::Escape($env:VERSION))\b.*?(?=^## |\z)")
+          if (-not $entry.Success) { throw "CHANGELOG.md has no entry for v$env:VERSION" }
+          $notes = @(
+            $entry.Value.Trim(), '',
+            '---', '',
+            "**Pre-release.** Built from commit $env:GITHUB_SHA (branch $env:GITHUB_REF_NAME) with cargo --locked on windows-latest; the Windows MSVC compile and the unit tests passed in CI in this run. It has **not** been verified on a physical PC / base station by the build.",
+            '',
+            "Go back to the classic window: tray icon -> Settings window style (Beta) -> Classic, or run ``gxoled.exe --classic-ui``. The stable release is v0.5.2.",
+            '',
+            "SHA-256 of ``$name``: $sha"
+          ) -join "`n"
+          Set-Content release/notes.md $notes -Encoding utf8
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: GxOled-Advanced-v${{ env.HUMAN }}-Windows-x64
+          path: |
+            release/*.exe
+            release/SHA256SUMS.txt
+            release/THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+      - name: Publish GitHub pre-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v$env:VERSION"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { throw "$tag already exists; refusing to overwrite" }
+          gh release create $tag "release/GxOled Advanced v$env:HUMAN.exe" release/SHA256SUMS.txt release/THIRD_PARTY_NOTICES.md --target "$env:GITHUB_SHA" --title "GxOled Advanced v$env:HUMAN (pre-release)" --notes-file release/notes.md --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the GitHub pre-release' }

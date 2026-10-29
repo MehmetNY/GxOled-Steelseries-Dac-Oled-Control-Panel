@@ -20,8 +20,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Test HID parsing and drawing logic
-        run: cargo test --locked -p gxoled_lib -p gxoled_draw
+      - name: Test HID parsing, drawing logic and the modern UI toolkit
+        run: cargo test --locked -p gxoled_lib -p gxoled_draw -p gxoled_ui
 
   windows-msvc-build:
     name: Windows MSVC build
@@ -41,7 +41,7 @@ jobs:
       - name: Check desktop app
         run: cargo check --locked -p gxoled_app
       - name: Test HID parsing, drawing logic, and media metadata handling
-        run: cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw --features gxoled_app/sdl3-static
+        run: cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw -p gxoled_ui --features gxoled_app/sdl3-static
       - name: Build desktop app with SDL3 static
         run: cargo build --locked --release -p gxoled_app --features sdl3-static
       - name: Upload Windows test executable

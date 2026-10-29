@@ -1,3 +1,19 @@
+## GxOled Advanced v0.5.3-beta — modern settings interface (Beta, optional)
+
+> **Pre-release for trying out a new look.** The stable line stays at v0.5.2 (`main`, `stable`, `v0.5.0`–`v0.5.2` are untouched). If you do not like the new interface, switch back in one click — see *Going back* below.
+
+- **New (Beta): modern settings window.** All seven pages (General, Clock, Animations, GIF Studio, Display, Media, About) and the animation-profile editor were redesigned: sidebar navigation, card layout, a live 128 × 64 OLED panel, toggle/radio cards, a brightness slider, light and dark themes, English/Türkçe, per-monitor DPI scaling, resizable window. The window title bar is still the native Windows one (dark/light coloured through DWM on Windows 11).
+- **Nothing was taken away.** The classic Win32 settings window is unchanged (only its version caption now reads *v0.5.3 Beta*) and is still compiled into the same EXE. Modern is the default in this beta; choose the style with
+  - the tray menu → **Settings window style (Beta)** → *Modern (Beta)* / *Classic*, or
+  - **General → Settings window (Beta)** inside the modern window (*Modern* / *Classic* chips), or
+  - the command line: `gxoled.exe --classic-ui` (remembers Classic) / `--modern-ui`.
+- **Automatic fall-back to Classic** if the modern window cannot be created, panics inside its window procedure, or a previous start did not reach its first painted frame (crash-guard marker `.modern-ui-pending` in `%APPDATA%\GxOled`). The choice is saved, so the next start opens the classic window.
+- **How it is built:** new crate `gxoled_ui` (no OS dependency) draws each window as SVG with the pure-Rust `resvg` renderer and embedded fonts/icons; `gxoled_app/src/modern_window.rs` is a small Win32 host (HWND, input, DPI, DWM), `modern_ui.rs` maps the UI to the existing `MenuEvent`s with the same control ids as the classic window, `settings_ui.rs` chooses between the two. No browser, WebView, GPU or extra runtime is needed. Rust remains the only OLED writer.
+- **Config:** new optional key `ui_style` (`"Modern"` or `"Classic"`) in `config.toml`; files without it open Modern in this beta. Older GxOled versions ignore the key.
+- **Third-party:** Inter fonts (SIL OFL 1.1), Lucide icons (ISC), `resvg`/`usvg`/`tiny-skia` and their dependencies (MIT / Apache-2.0 / BSD) — see `THIRD_PARTY_NOTICES.md` and `gxoled_ui/licenses/`.
+- **Verification status (be precise):** compiled and unit-tested on Windows in CI (see the release notes for the commit); the UI toolkit itself is unit-tested (interaction, layout, rendering to PNG in English/Turkish, dark/light). **Not yet verified on a physical Windows PC / base station:** window behaviour, DPI changes, title-bar colouring, resizing, the native text control of the profile editor, and the cost of repainting while hovering. Please report anything that looks wrong — and use Classic meanwhile.
+- **Not part of this beta:** a custom title bar, and the GIF editor inspired by GGIF-Studio (later phase).
+
 ## GxOled Advanced v0.5.2 — volume screen hand-back fixed, selectable volume-screen time
 
 - **Fix:** after turning the DAC knob GxOled came back 4–6 s late instead of the intended 2.5 s. Measured cause (60 fps video aligned with a frame log, Nova Pro Wireless `12E5`): the base station discards every host frame for about 3.5 s after a dial report, so a frame written when the 2.5 s hold ended stayed invisible. GxOled now sends the documented `0x95` ("return to the SteelSeries UI") immediately before the first frame after the hold; that frame is accepted and the native screen is gone about 2.6 s after the last report. Details and limits: `docs/VOLUME_OSD_HANDOFF.md`.

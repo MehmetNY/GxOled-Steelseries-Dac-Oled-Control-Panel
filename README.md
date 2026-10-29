@@ -19,6 +19,8 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
 
 > **Current release:** v0.5.2 is the **original-layout** Windows build; it fixes the late return of GxOled after turning the DAC volume knob and makes the volume-screen time selectable (1–5 s). The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
 
+> **Beta (optional):** [`v0.5.3-beta`](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.3-beta) is a **pre-release** with a completely redesigned, modern settings interface. It lives on the branch `release/v0.5.3-beta`, not on `main`, and the classic window is still inside it: switch back any time from the tray menu (*Settings window style (Beta)*), from the *General* page, or with `--classic-ui`. See [`docs/MODERN-UI-BETA.md`](docs/MODERN-UI-BETA.md). Third-party licences: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 ## Features
 
 - **Clock gallery** — digital standard/large, round/square analog, and Casio-inspired digital dial; a live 128 × 64 OLED preview.
