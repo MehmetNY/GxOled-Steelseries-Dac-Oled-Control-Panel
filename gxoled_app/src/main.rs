@@ -1329,7 +1329,8 @@ fn main() {
         set(tm_brightness_radio.title,"Screen brightness","Ekran parlaklığı");
         set(tm_volume_osd_radio.title,"Volume screen time","Ses ekranı süresi");
         for (e,ms) in &tm_volume_osd_radio.entries {
-            set(*e,&volume_osd_hold_label(*ms,false),&volume_osd_hold_label(*ms,true));
+            // Not `set`: that closure was inferred for 'static literals, these captions are built.
+            tray_label(*e,&volume_osd_hold_label(*ms,false),&volume_osd_hold_label(*ms,true),language);
         }
         set(tm_clock_burn_in_radio.title,"Clock burn-in protection","Saat yanık izi koruması");
         set(tm_startup_check,"Start GxOled with Windows","Windows ile GxOled'i başlat");
