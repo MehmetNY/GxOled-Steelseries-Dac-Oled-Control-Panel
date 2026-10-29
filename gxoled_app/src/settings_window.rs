@@ -64,6 +64,10 @@ const ID_SHIFT_BASE:u32=620;
 const ID_BURN_BASE:u32=625;
 const ID_NOTIFY_BASE:u32=651;
 const ID_QUIT_BASE:u32=660;
+// Seven radio buttons, one per `VOLUME_OSD_HOLD_CHOICES_MS` entry (ids 670..=676).
+const ID_VOLUME_HOLD_BASE:u32=670;
+const ID_VOLUME_HOLD_TITLE:u32=720;
+const ID_VOLUME_HOLD_NOTE:u32=721;
 
 const ID_EDIT_PROFILE: u32 = 372;
 // Main settings is intentionally fixed-size. The earlier proportional layout
@@ -232,6 +236,7 @@ struct UiSnapshot {
     brightness:Option<u8>,burn_wide:bool,burn_no_overlap:bool,
     media:bool,idle:bool,startup:bool,
     status:StatusNotifyMode,quit:ConfigQuitMode,
+    volume_hold:u32,
 }
 impl UiSnapshot {
     fn capture(c:&Config)->Self {Self{
@@ -242,6 +247,7 @@ impl UiSnapshot {
         burn_no_overlap:c.clock_shift_no_overlap,
         media:c.show_media,idle:c.idle_timeout,
         startup:c.startup,status:c.status_notify,quit:c.quit_mode,
+        volume_hold:c.volume_osd_hold_ms,
     }}
 }
 #[derive(Clone)]
@@ -585,6 +591,13 @@ fn update_labels(buttons:&[(u32,usize)], language:ConfigLanguage) {
             712 => if tr {"OLED ekran kaydırma"}else{"OLED screen shift"},
             713 => if tr {"Saat yanık izi koruması"}else{"Clock burn-in protection"},
             714 => if tr {"Bağlantı durumu simgesi"}else{"Connection status icon"},
+            ID_VOLUME_HOLD_TITLE => if tr {"Ses ekranı süresi"}else{"Volume screen time"},
+            ID_VOLUME_HOLD_NOTE => if tr {"Düğmeyi çevirince DAC'ın kendi ses ekranı bu kadar kalır, sonra GxOled geri döner."}
+                else {"After you turn the DAC knob its own volume screen stays this long, then GxOled returns."},
+            id if (ID_VOLUME_HOLD_BASE..ID_VOLUME_HOLD_BASE+super::VOLUME_OSD_HOLD_CHOICES_MS.len() as u32).contains(&id) =>
+                {let ms=super::VOLUME_OSD_HOLD_CHOICES_MS[(id-ID_VOLUME_HOLD_BASE) as usize];
+                 let text=wide(&super::volume_osd_hold_label(ms,tr));
+                 unsafe{SetWindowTextW(*h as Handle,text.as_ptr());} continue},
             715 => if tr {"Medya ekranı düzeni"}else{"Media screen layout"},
             717 => if tr {"GIF başlat / durdur"}else{"Start / Stop GIF"},
             _ => continue,
@@ -854,7 +867,7 @@ fn paint_panels(dc:Handle, s:&State,cw:i32,ch:i32){
         if s.page!=5 {
             draw_label(dc,"SteelSeries  •  128 x 64",
                 &Rect{left:p_x,top:346,right:cw-18,bottom:374},muted,false);
-            draw_label(dc,"GxOled Advanced v0.5.1",
+            draw_label(dc,"GxOled Advanced v0.5.2",
                 &Rect{left:p_x,top:395,right:cw-20,bottom:422},muted,false);
             rounded(dc,&Rect{left:p_x-4,top:458,right:cw-25,bottom:555},
                 if dark{color(30,35,43)}else{color(240,249,248)},border,16);
@@ -911,7 +924,7 @@ unsafe extern "system" fn wnd_proc(hwnd:Handle, message:u32, w:usize, l:isize)->
             let panel=color(26,28,33);
             let ctrl_id=unsafe{GetDlgCtrlID(l as Handle)} as u32;
             let heading=message==WM_CTLCOLORSTATIC &&
-                [500,503,510,511,520,718,530,531,713,540,710,712,714].contains(&ctrl_id);
+                [500,503,510,511,520,718,530,531,713,540,710,712,714,ID_VOLUME_HOLD_TITLE].contains(&ctrl_id);
             let fg=if heading{color(49,224,205)}else{COLOR_DARK_TEXT};
             unsafe {SetTextColor(w as Handle,fg);SetBkColor(w as Handle,panel);}
             return *PANEL_BRUSH.get_or_init(||unsafe{CreateSolidBrush(panel)} as usize) as isize;
@@ -1007,6 +1020,8 @@ unsafe extern "system" fn wnd_proc(hwnd:Handle, message:u32, w:usize, l:isize)->
                     653 => Some(MenuEvent::SetStatusNotifyMode(StatusNotifyMode::Always)),
                     654 => Some(MenuEvent::SetStatusNotifyMode(StatusNotifyMode::WhenConnected)),
                     655 => Some(MenuEvent::SetStatusNotifyMode(StatusNotifyMode::WhenDisconnected)),
+                    id if (ID_VOLUME_HOLD_BASE..ID_VOLUME_HOLD_BASE+super::VOLUME_OSD_HOLD_CHOICES_MS.len() as u32).contains(&id) =>
+                        Some(MenuEvent::SetVolumeOsdHold(super::VOLUME_OSD_HOLD_CHOICES_MS[(id-ID_VOLUME_HOLD_BASE) as usize])),
                     660 => Some(MenuEvent::SetQuitMode(ConfigQuitMode::Screensaver)),
                     661 => Some(MenuEvent::SetQuitMode(ConfigQuitMode::StockUi)),
                             354 => Some(MenuEvent::ToggleIdleFromWindow),
@@ -1215,6 +1230,15 @@ pub fn create(tx:Sender<MenuEvent>) -> Result<(),String> {
     for (i,name) in ["Off","Notify","Always","When connected","When disconnected"].iter().enumerate(){
         make(3,"BUTTON",name,ID_NOTIFY_BASE+i as u32,244,633+i as i32*34,250,29,4|WS_TABSTOP);
     }
+    // How long the base station's own volume screen stays up (first choice column: 1, 1.5, 2, 2.5 s;
+    // second column: 3, 4, 5 s). Captions come from `update_labels`.
+    make(3,"STATIC","Volume screen time",ID_VOLUME_HOLD_TITLE,244,815,330,28,0);
+    let volume_note=make(3,"STATIC","After you turn the DAC knob its own volume screen stays this long, then GxOled returns.",ID_VOLUME_HOLD_NOTE,244,849,395,44,0);
+    if !note_font.is_null(){unsafe{SendMessageW(volume_note,WM_SETFONT,note_font as usize,1);}}
+    for (i,ms) in super::VOLUME_OSD_HOLD_CHOICES_MS.iter().enumerate(){
+        let (col,row)=(i as i32/4,i as i32%4);
+        make(3,"BUTTON",&super::volume_osd_hold_label(*ms,false),ID_VOLUME_HOLD_BASE+i as u32,244+col*195,903+row*33,190,29,4|WS_TABSTOP);
+    }
     // Media
     make(4,"STATIC","Media controls",540,244,75,310,26,0);
     make(4,"BUTTON","Show media metadata",ID_MEDIA,244,120,250,32,3|WS_TABSTOP);
@@ -1270,6 +1294,8 @@ pub fn sync(config:&Config){
     let notify_id=match config.status_notify{StatusNotifyMode::Off=>651,StatusNotifyMode::Notify=>652,
         StatusNotifyMode::Always=>653,StatusNotifyMode::WhenConnected=>654,StatusNotifyMode::WhenDisconnected=>655};
     let quit_id=match config.quit_mode {ConfigQuitMode::Screensaver=>660,ConfigQuitMode::StockUi=>661};
+    let volume_hold_id=ID_VOLUME_HOLD_BASE+super::VOLUME_OSD_HOLD_CHOICES_MS.iter()
+        .position(|ms|*ms==config.volume_osd_hold_ms).unwrap_or(3) as u32;
     let Some(state) = STATE.get() else { return; };
     let (checks, profile_selection, brightness_ui) = {
         let Ok(mut s) = state.lock() else { return; };
@@ -1281,9 +1307,10 @@ pub fn sync(config:&Config){
         for (id,handle) in &s.buttons {
             if [300,301,302,310,311,312,313,314,320,321,322,330,331,332,333,334,
                 ID_IDLE,ID_MEDIA,380,381,390,391,ID_STARTUP,620,621,622,
-                625,626,627,651,652,653,654,655,660,661].contains(id) {
+                625,626,627,651,652,653,654,655,660,661,670,671,672,673,674,675,676].contains(id) {
                 let checked=*id==mode_id || *id==style_id || *id==anim_id || *id==time_id
                     || *id==shift_id || *id==burn_id || *id==notify_id || *id==quit_id
+                    || *id==volume_hold_id
                     || (*id==ID_IDLE && config.idle_timeout)
                     || (*id==ID_MEDIA && config.show_media)
                     || (*id==ID_STARTUP && config.startup)

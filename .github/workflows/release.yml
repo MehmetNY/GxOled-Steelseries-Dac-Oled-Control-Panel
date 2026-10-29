@@ -1,0 +1,78 @@
+name: Release
+# Pushing a branch named release/v<version>-advanced builds the Windows EXE and publishes the GitHub
+# release v<version>. The version comes from the workspace Cargo.toml, so this file does not change
+# per release. An existing tag or release is never overwritten.
+on:
+  push:
+    branches:
+      - 'release/v*-advanced'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gxoled-release-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ''
+      - name: Read version and verify the branch, the original UI and the version label
+        shell: pwsh
+        run: |
+          $manifest = Get-Content Cargo.toml -Raw
+          $m = [regex]::Match($manifest, '(?ms)\[workspace\.package\].*?^version\s*=\s*"([^"]+)"')
+          if (-not $m.Success) { throw 'workspace version not found in Cargo.toml' }
+          $version = $m.Groups[1].Value
+          if ($env:GITHUB_REF_NAME -like 'release/*' -and $env:GITHUB_REF_NAME -ne "release/v$version-advanced") {
+            throw "Branch $env:GITHUB_REF_NAME does not match Cargo.toml version $version (expected release/v$version-advanced)"
+          }
+          $ui = Get-Content gxoled_app/src/settings_window.rs -Raw
+          foreach ($marker in @('GENERAL CONTROL','CLOCK GALLERY','LIVE OLED','MONOCHROME',"GxOled Advanced v$version")) {
+            if (-not $ui.Contains($marker)) { throw "Protected UI marker missing: $marker" }
+          }
+          if ($ui.Contains('OLED CONTROL CENTER')) { throw 'Unwanted redesigned UI detected' }
+          if (-not (Test-Path go_animations/gxoled-animations.exe)) { throw 'Embedded Go renderer missing' }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Cargo check
+        run: cargo check --locked -p gxoled_app --features sdl3-static
+      - name: Regression tests
+        run: cargo test --locked -p gxoled_app -p gxoled_lib -p gxoled_draw --features gxoled_app/sdl3-static
+      - name: Build Windows release EXE
+        run: cargo build --locked --release -p gxoled_app --features sdl3-static
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $name = "GxOled Advanced v$env:VERSION.exe"
+          Copy-Item target/release/gxoled.exe "release/$name"
+          $sha = (Get-FileHash "release/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $name" | Set-Content release/SHA256SUMS.txt -Encoding ascii
+          $text = Get-Content CHANGELOG.md -Raw
+          $entry = [regex]::Match($text, "(?ms)^## GxOled Advanced v$([regex]::Escape($env:VERSION))\b.*?(?=^## |\z)")
+          if (-not $entry.Success) { throw "CHANGELOG.md has no entry for v$env:VERSION" }
+          $notes = @($entry.Value.Trim(), '', "Windows x64, built from commit $env:GITHUB_SHA with cargo --locked; unit tests passed in CI.", "SHA-256: $sha") -join "`n"
+          Set-Content release/notes.md $notes -Encoding utf8
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: GxOled-Advanced-v${{ env.VERSION }}-Windows-x64
+          path: |
+            release/*.exe
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v$env:VERSION"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { throw "$tag already exists; refusing to overwrite" }
+          gh release create $tag "release/GxOled Advanced v$env:VERSION.exe" release/SHA256SUMS.txt --target "$env:GITHUB_SHA" --title "GxOled Advanced $tag" --notes-file release/notes.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the GitHub release' }

@@ -8,7 +8,7 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
 </p>
 
 <p align="center">
-  <a href="https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.1"><strong>Download GxOled Advanced v0.5.1</strong></a>
+  <a href="https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.2"><strong>Download GxOled Advanced v0.5.2</strong></a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
@@ -17,7 +17,7 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
   <a href="#developers--ai-agents">Developer guide</a>
 </p>
 
-> **Current release:** v0.5.1 is the **original-layout** Windows build with the DAC volume-OSD handoff correction. The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
+> **Current release:** v0.5.2 is the **original-layout** Windows build; it fixes the late return of GxOled after turning the DAC volume knob and makes the volume-screen time selectable (1–5 s). The GIF Studio page currently offers GIF selection and playback; a multi-layer GIF editor is **in development**, not part of this stable release. The application is unofficial and not affiliated with SteelSeries.
 
 ## Features
 
@@ -25,7 +25,7 @@ Clock styles, burn-in mitigation, SteelClock-Go animations, GIF playback, bright
 - **OLED burn-in mitigation** — an independent screen shifter plus clock-specific **Random Movements** and **No overlapping Pixels** modes. These distribute static pixel usage; they **do not guarantee** that burn-in cannot occur.
 - **SteelClock-Go animations** — **Matrix Rain**, **Hyperspace**, **Star Wars Intro**, and **Game of Life**, including editable/importable/exportable 128 × 64 JSON profiles. The original Go renderer runs as a helper; GxOled retains control of the USB/OLED connection.
 - **GIF playback & GIF Studio tab** — choose a GIF and start/stop its playback. A richer editor inspired by [GGIF-Studio](https://github.com/D4rkTT/GGIF-Studio) (timeline, layers, transforms, dithering) is planned and **not yet available** in v0.5.0.
-- **Display & daily controls** — device brightness levels 1–10, idle screensaver/stock display behavior, native volume overlay cooperation, and optional media information.
+- **Display & daily controls** — device brightness levels 1–10, idle screensaver/stock display behavior, native volume overlay cooperation with a selectable hold time (**Display → Volume screen time**, 1–5 s, default 2.5 s), and optional media information.
 - **Native Windows settings** — original dark/light interface, English/Türkçe, Tray/Window/Hybrid modes, optional Windows startup, and saved preferences.
 
 ## Screenshots
@@ -47,10 +47,11 @@ The original Windows layout is pictured above. More screenshots from this projec
 
 ## Get started
 
-1. Download the [**v0.5.0 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.1) (`gxoled.exe` or Windows ZIP).
+1. Download the [**v0.5.2 Windows release**](https://github.com/MehmetNY/GxOled-Steelseries-Dac-Oled-Control-Panel/releases/tag/v0.5.2) (`GxOled.Advanced.v0.5.2.exe`; compare it with `SHA256SUMS.txt`).
 2. Connect a supported **SteelSeries base station** over USB and run GxOled.
 3. Open **Settings** (using the tray icon or the configured window mode). Select **Clock**, **Animations**, **GIF Studio**, or **Display**.
 4. Use **Display → Clock burn-in protection** for clock movement, and **Display → OLED screen shift** for whole-screen shifting.
+5. **Display → Volume screen time** sets how long the base station's own volume screen stays after you turn the knob before GxOled returns (1, 1.5, 2, 2.5, 3, 4 or 5 s). Background: [`docs/VOLUME_OSD_HANDOFF.md`](docs/VOLUME_OSD_HANDOFF.md).
 
 **Compatibility:** the code identifies Arctis Nova Pro **Wired** (`12CB`, `12CD`) and **Wireless** (`12E0`, `12E5`, `225D`) base stations. Nova Elite (`2244`) is experimental and not hardware-verified here. These IDs are USB **product IDs**, not a promise of universal SteelSeries compatibility. Windows is the primary tested desktop target; Linux/macOS sources exist but are not equivalent to a verified Windows release.
 

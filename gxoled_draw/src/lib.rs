@@ -274,6 +274,7 @@ enum DrawCommand {
     Pause,
     SetShiftMode(ShiftMode),
     SetBrightness(u8),
+    SetVolumeOsdHold(Duration),
     Stop,
     Probe,
 }
@@ -361,16 +362,30 @@ fn square_shift_calc(r: isize) -> Vec<(isize, isize)> {
 const RECONNECT_PERIOD: Duration = Duration::from_secs(1);
 // The base station takes over its OLED temporarily to show the volume OSD.
 // Stop sending custom frames until the knob has been idle for this long.
-const VOLUME_OSD_HOLD: Duration = Duration::from_millis(2500);
+/// Default time the base station's own volume screen stays up after the knob stops moving.
+pub const DEFAULT_VOLUME_OSD_HOLD: Duration = Duration::from_millis(2500);
+const MIN_VOLUME_OSD_HOLD: Duration = Duration::from_millis(500);
+const MAX_VOLUME_OSD_HOLD: Duration = Duration::from_secs(10);
+/// Pause between `0x95` ("return to the SteelSeries UI") and the first frame that follows it.
+const RETURN_UI_SETTLE: Duration = Duration::from_millis(40);
+
+fn clamp_volume_osd_hold(hold: Duration) -> Duration {
+    hold.clamp(MIN_VOLUME_OSD_HOLD, MAX_VOLUME_OSD_HOLD)
+}
 
 /// A few DAC firmware versions repeat identical unsolicited dial events during
-/// the built-in OSD. Do not turn a 2.5-second hold into a 5–6-second hold.
+/// the built-in OSD. Do not let those turn a short hold into a much longer one.
 /// Real volume changes always extend the hold. The same level becomes a new
-/// action only after a full quiet interval with no reports.
-fn is_new_volume_dial_action(previous: &mut Option<(u8, Instant)>, level: u8, now: Instant) -> bool {
+/// action only after a full quiet interval (`hold`) with no reports.
+fn is_new_volume_dial_action(
+    previous: &mut Option<(u8, Instant)>,
+    level: u8,
+    now: Instant,
+    hold: Duration,
+) -> bool {
     let is_new = match *previous {
         Some((last_level, last_report)) => {
-            level != last_level || now.saturating_duration_since(last_report) >= VOLUME_OSD_HOLD
+            level != last_level || now.saturating_duration_since(last_report) >= hold
         }
         None => true,
     };
@@ -402,6 +417,7 @@ fn run_draw_device_thread(
     let mut volume_osd_until: Option<Instant> = None;
     let mut volume_osd_started: Option<Instant> = None;
     let mut last_volume_dial_report: Option<(u8, Instant)> = None;
+    let mut osd_hold = DEFAULT_VOLUME_OSD_HOLD;
     loop {
         let time = Instant::now();
         let mut stop_after_frame = false;
@@ -416,6 +432,7 @@ fn run_draw_device_thread(
                         .send(DrawEvent::BrightnessSet { value, error })
                         .unwrap();
                 }
+                DrawCommand::SetVolumeOsdHold(hold) => osd_hold = clamp_volume_osd_hold(hold),
                 DrawCommand::Stop => stop_after_frame = true,
                 DrawCommand::Probe => _ = dev.probe(),
             }
@@ -434,7 +451,7 @@ fn run_draw_device_thread(
         // causes its firmware to show a native volume OSD. Sending a custom OLED frame
         // while that OSD is active makes the two writers race and can produce flicker.
         // Extend the yield period on every volume event, so continuous dial movement
-        // keeps the native UI in control until 2.5 seconds after the last event.
+        // keeps the native UI in control until `osd_hold` (2.5 s by default) after the last event.
         if connected {
             let events = dev.get_events().unwrap_or_else(|_| {
                 connected = false;
@@ -444,9 +461,9 @@ fn run_draw_device_thread(
             for event in events {
                 if let DeviceEvent::VolumeDial { volume } = &event {
                     let event_time = Instant::now();
-                    if is_new_volume_dial_action(&mut last_volume_dial_report, *volume, event_time) {
+                    if is_new_volume_dial_action(&mut last_volume_dial_report, *volume, event_time, osd_hold) {
                         volume_osd_started.get_or_insert(event_time);
-                        volume_osd_until = Some(event_time + VOLUME_OSD_HOLD);
+                        volume_osd_until = Some(event_time + osd_hold);
                     }
                 }
                 event_sender.send(DrawEvent::DeviceEvent(event)).unwrap();
@@ -456,6 +473,20 @@ fn run_draw_device_thread(
         let volume_osd_active = volume_osd_until.is_some_and(|until| Instant::now() < until);
         if !volume_osd_active {
             if let Some(suppression_started) = volume_osd_started.take() {
+                // Hand the display back. After a knob turn the base station discards host
+                // frames for about 3.5 s (measured with a 60 fps camera on a Nova Pro Wireless,
+                // PID 0x12e5), so a plain frame written when the hold ends would stay invisible
+                // for another one to two seconds. `0x95` ("return to the SteelSeries UI")
+                // immediately before the first frame makes that frame stick: the native screen
+                // was gone 2.62-2.65 s after the last report in 5 of 5 handoffs with a 2.5 s hold.
+                // The command is non-persistent; a failed write is ignored because the frame
+                // write that follows reports a lost device.
+                if connected {
+                    let _ = dev.return_to_ui();
+                    spin_sleep::sleep(RETURN_UI_SETTLE);
+                    // Send a frame right away even if nothing on screen changed.
+                    prev_screen = Bitmap::new(0, 0, false);
+                }
                 // Shift animation deadlines by the exact time yielded to the firmware. Without
                 // this, GIF playback would rush through the frames that elapsed during the OSD.
                 let paused_for = Instant::now().saturating_duration_since(suppression_started);
@@ -953,6 +984,12 @@ impl DrawDevice {
     }
     /// Request a hardware brightness level from the render thread.
     /// The result is reported as `DrawEvent::BrightnessSet`.
+    /// How long the base station's own volume screen stays up after the knob stops (clamped to
+    /// 0.5-10 s). Takes effect for the next knob turn.
+    pub fn set_volume_osd_hold(&mut self, hold: Duration) {
+        self.cmd_sender.send(DrawCommand::SetVolumeOsdHold(hold)).unwrap();
+    }
+
     pub fn set_brightness(&mut self, value: u8) {
         self.cmd_sender.send(DrawCommand::SetBrightness(value)).unwrap();
     }
@@ -1039,35 +1076,63 @@ pub fn casio_clock_preview(twelve_hour: bool, turkish: bool) -> Bitmap { casio::
 
 #[cfg(test)]
 mod volume_osd_dedup_tests {
-    use super::{is_new_volume_dial_action, VOLUME_OSD_HOLD};
+    use super::{clamp_volume_osd_hold, is_new_volume_dial_action, DEFAULT_VOLUME_OSD_HOLD};
     use std::time::{Duration, Instant};
+
+    const HOLD: Duration = DEFAULT_VOLUME_OSD_HOLD;
+
+    #[test]
+    fn default_hold_is_two_and_a_half_seconds() {
+        assert_eq!(DEFAULT_VOLUME_OSD_HOLD, Duration::from_millis(2500));
+    }
 
     #[test]
     fn duplicate_firmware_reports_do_not_extend_hold() {
         let start = Instant::now();
         let mut previous = None;
-        assert!(is_new_volume_dial_action(&mut previous, 20, start));
+        assert!(is_new_volume_dial_action(&mut previous, 20, start, HOLD));
         for milliseconds in [500, 1600, 2400] {
-            assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(milliseconds)));
+            assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(milliseconds), HOLD));
         }
-        assert_eq!(VOLUME_OSD_HOLD, Duration::from_millis(2500));
     }
 
     #[test]
     fn volume_changes_rearm_timer() {
         let start = Instant::now();
         let mut previous = None;
-        assert!(is_new_volume_dial_action(&mut previous, 20, start));
-        assert!(is_new_volume_dial_action(&mut previous, 21, start + Duration::from_millis(80)));
-        assert!(is_new_volume_dial_action(&mut previous, 22, start + Duration::from_millis(150)));
+        assert!(is_new_volume_dial_action(&mut previous, 20, start, HOLD));
+        assert!(is_new_volume_dial_action(&mut previous, 21, start + Duration::from_millis(80), HOLD));
+        assert!(is_new_volume_dial_action(&mut previous, 22, start + Duration::from_millis(150), HOLD));
     }
 
     #[test]
     fn same_level_after_silence_is_new_dial_action() {
         let start = Instant::now();
         let mut previous = None;
-        assert!(is_new_volume_dial_action(&mut previous, 20, start));
-        assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(200)));
-        assert!(is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(2800)));
+        assert!(is_new_volume_dial_action(&mut previous, 20, start, HOLD));
+        assert!(!is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(200), HOLD));
+        assert!(is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(2800), HOLD));
+    }
+
+    #[test]
+    fn quiet_interval_follows_the_configured_hold() {
+        let start = Instant::now();
+        for (hold_ms, repeat_at_ms, expect_new) in [(1000, 900, false), (1000, 1100, true), (5000, 4900, false), (5000, 5100, true)] {
+            let hold = Duration::from_millis(hold_ms);
+            let mut previous = None;
+            assert!(is_new_volume_dial_action(&mut previous, 20, start, hold));
+            assert_eq!(
+                is_new_volume_dial_action(&mut previous, 20, start + Duration::from_millis(repeat_at_ms), hold),
+                expect_new,
+                "hold {hold_ms} ms, repeat after {repeat_at_ms} ms"
+            );
+        }
+    }
+
+    #[test]
+    fn configured_hold_is_kept_within_sane_bounds() {
+        assert_eq!(clamp_volume_osd_hold(Duration::ZERO), Duration::from_millis(500));
+        assert_eq!(clamp_volume_osd_hold(Duration::from_millis(1500)), Duration::from_millis(1500));
+        assert_eq!(clamp_volume_osd_hold(Duration::from_secs(60)), Duration::from_secs(10));
     }
 }

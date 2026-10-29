@@ -25,6 +25,31 @@ use std::{
 
 const NOTIF_DUR: Duration = Duration::from_secs(5);
 
+/// Times (ms) the base station's own volume screen can stay up after the knob stops moving,
+/// before GxOled takes the OLED back. The first entry that equals the default is the factory value.
+const VOLUME_OSD_HOLD_CHOICES_MS: [u32; 7] = [1000, 1500, 2000, 2500, 3000, 4000, 5000];
+const DEFAULT_VOLUME_OSD_HOLD_MS: u32 = 2500;
+
+/// Snap a stored value to the nearest selectable one (a hand-edited config must not produce a
+/// time the UI cannot show); the lower choice wins a tie.
+fn normalize_volume_osd_hold_ms(ms: u32) -> u32 {
+    VOLUME_OSD_HOLD_CHOICES_MS
+        .iter()
+        .copied()
+        .min_by_key(|choice| (choice.abs_diff(ms), *choice))
+        .unwrap_or(DEFAULT_VOLUME_OSD_HOLD_MS)
+}
+
+/// Menu/window caption of one choice, e.g. `2.5 s (default)` / `2,5 sn (varsayılan)`.
+#[cfg(target_os = "windows")]
+fn volume_osd_hold_label(ms: u32, turkish: bool) -> String {
+    let seconds = if ms % 1000 == 0 { format!("{}", ms / 1000) } else { format!("{}.{}", ms / 1000, (ms % 1000) / 100) };
+    let seconds = if turkish { seconds.replace('.', ",") } else { seconds };
+    let unit = if turkish { "sn" } else { "s" };
+    let default = if ms == DEFAULT_VOLUME_OSD_HOLD_MS { if turkish { " (varsayılan)" } else { " (default)" } } else { "" };
+    format!("{seconds} {unit}{default}")
+}
+
 #[derive(Serialize, Deserialize, Default, Clone, Copy, PartialEq)]
 enum ConfigTimeMode {
     Off,
@@ -162,6 +187,9 @@ struct Config {
     // Remember the last selected animation and whether it was playing.
     animation_path: Option<PathBuf>,
     animation_playing: bool,
+    // How long the base station's own volume screen stays up after the knob stops (ms; one of
+    // `VOLUME_OSD_HOLD_CHOICES_MS`).
+    volume_osd_hold_ms: u32,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -187,6 +215,7 @@ impl Default for Config {
             startup: false,
             animation_path: None,
             animation_playing: false,
+            volume_osd_hold_ms: DEFAULT_VOLUME_OSD_HOLD_MS,
         }
     }
 }
@@ -221,6 +250,7 @@ impl Config {
         if conf.screen_brightness.is_some_and(|value| !(1..=10).contains(&value)) {
             conf.screen_brightness = None;
         }
+        conf.volume_osd_hold_ms = normalize_volume_osd_hold_ms(conf.volume_osd_hold_ms);
         // Old versions stored ClockAndMedia. Migrate that broken layout to the
         // exclusive media screen while keeping the legacy enum variant readable.
         conf.media_mode = MediaMode::MediaOnly;
@@ -883,6 +913,7 @@ enum MenuEvent {
     #[cfg(target_os = "windows")]
     ToggleStartupFromWindow,
     SetBrightness(u8),
+    SetVolumeOsdHold(u32),
     #[cfg(target_os = "windows")]
     ToggleStartup,
     GifSelected(PathBuf),
@@ -978,7 +1009,45 @@ fn media_layers_need_refresh(
     current != previous || layers_present != layers_expected
 }
 
+/// Windows: report whether another GxOled is already running. Two copies would both write
+/// OLED frames and both react to the dial, which looks like lag or flicker and makes timing
+/// measurements meaningless. The mutex handle is deliberately never closed; it lives as long
+/// as the process.
+#[cfg(target_os = "windows")]
+fn another_instance_is_running() -> bool {
+    use windows_sys::Win32::{
+        Foundation::{ERROR_ALREADY_EXISTS, GetLastError},
+        System::Threading::CreateMutexW,
+    };
+    let name: Vec<u16> = "Local\\GxOled.Advanced.SingleInstance"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if handle.is_null() {
+        // The guard itself failed: never block startup because of it.
+        return false;
+    }
+    // Must be read immediately after CreateMutexW.
+    unsafe { GetLastError() == ERROR_ALREADY_EXISTS }
+}
+
 fn main() {
+    #[cfg(target_os = "windows")]
+    {
+        if another_instance_is_running() {
+            MessageDialog::new()
+                .set_level(MessageLevel::Info)
+                .set_title("GxOled")
+                .set_description(
+                    "GxOled is already running. Look for its icon in the system tray, and use \
+                     'Quit GxOled' there before starting another copy.",
+                )
+                .show();
+            return;
+        }
+    }
+
     // Initial loading
     let mut config = Config::load();
     #[cfg(target_os = "windows")]
@@ -1124,6 +1193,23 @@ fn main() {
         MenuEvent::SetBrightness,
     );
 
+    let tm_volume_osd_radio = RadioMenu::new(
+        menu,
+        c"Volume screen time",
+        &[
+            (c"1 s", 1000u32),
+            (c"1.5 s", 1500u32),
+            (c"2 s", 2000u32),
+            (c"2.5 s (default)", 2500u32),
+            (c"3 s", 3000u32),
+            (c"4 s", 4000u32),
+            (c"5 s", 5000u32),
+        ],
+        config.volume_osd_hold_ms,
+        &menu_tx,
+        MenuEvent::SetVolumeOsdHold,
+    );
+
     let tm_clock_burn_in_radio = RadioMenu::new(
         menu,
         c"Clock burn-in protection",
@@ -1241,6 +1327,10 @@ fn main() {
         set(tm_idle_check,"Screensaver when idle","Boştayken ekran koruyucu");
         set(tm_shift_radio.title,"OLED screen shift","OLED ekran kaydırma");
         set(tm_brightness_radio.title,"Screen brightness","Ekran parlaklığı");
+        set(tm_volume_osd_radio.title,"Volume screen time","Ses ekranı süresi");
+        for (e,ms) in &tm_volume_osd_radio.entries {
+            set(*e,&volume_osd_hold_label(*ms,false),&volume_osd_hold_label(*ms,true));
+        }
         set(tm_clock_burn_in_radio.title,"Clock burn-in protection","Saat yanık izi koruması");
         set(tm_startup_check,"Start GxOled with Windows","Windows ile GxOled'i başlat");
         set(tm_animation_menu,"Animation","Animasyon");
@@ -1415,6 +1505,7 @@ fn main() {
 
     // Go!
     dev.set_shift_mode(config.oled_shift.to_api());
+    dev.set_volume_osd_hold(Duration::from_millis(config.volume_osd_hold_ms as u64));
     if let Some(brightness) = config.screen_brightness {
         // The selection was persisted; re-apply it to hardware after reconnect/restart.
         dev.set_brightness(brightness);
@@ -1612,6 +1703,13 @@ fn main() {
                     config.oled_shift = mode;
                     tm_shift_radio.update_checked(mode);
                     dev.set_shift_mode(config.oled_shift.to_api());
+                }
+                MenuEvent::SetVolumeOsdHold(ms) => {
+                    let ms = normalize_volume_osd_hold_ms(ms);
+                    config_updated = true;
+                    config.volume_osd_hold_ms = ms;
+                    tm_volume_osd_radio.update_checked(ms);
+                    dev.set_volume_osd_hold(Duration::from_millis(ms as u64));
                 }
                 MenuEvent::SetClockBurnInMode(mode) => {
                     config_updated = true;
@@ -2094,5 +2192,51 @@ mod media_layer_state_tests {
         let media = Some(Media { title: "Playing".into(), artist: "Artist".into() });
         assert!(media_layers_need_refresh(&media, &media, false, true));
         assert!(!media_layers_need_refresh(&media, &media, true, true));
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod single_instance_tests {
+    use super::another_instance_is_running;
+
+    #[test]
+    fn second_call_in_the_same_process_sees_the_mutex() {
+        assert!(!another_instance_is_running());
+        assert!(another_instance_is_running());
+    }
+}
+
+#[cfg(test)]
+mod volume_osd_hold_setting_tests {
+    use super::{normalize_volume_osd_hold_ms, Config, DEFAULT_VOLUME_OSD_HOLD_MS, VOLUME_OSD_HOLD_CHOICES_MS};
+
+    #[test]
+    fn default_is_two_and_a_half_seconds_and_selectable() {
+        assert_eq!(DEFAULT_VOLUME_OSD_HOLD_MS, 2500);
+        assert_eq!(Config::default().volume_osd_hold_ms, 2500);
+        assert!(VOLUME_OSD_HOLD_CHOICES_MS.contains(&DEFAULT_VOLUME_OSD_HOLD_MS));
+        assert_eq!(VOLUME_OSD_HOLD_CHOICES_MS, [1000, 1500, 2000, 2500, 3000, 4000, 5000]);
+    }
+
+    #[test]
+    fn every_choice_survives_normalisation_and_odd_values_snap_to_the_nearest() {
+        for choice in VOLUME_OSD_HOLD_CHOICES_MS {
+            assert_eq!(normalize_volume_osd_hold_ms(choice), choice);
+        }
+        assert_eq!(normalize_volume_osd_hold_ms(0), 1000);
+        assert_eq!(normalize_volume_osd_hold_ms(2200), 2000);
+        assert_eq!(normalize_volume_osd_hold_ms(2300), 2500);
+        assert_eq!(normalize_volume_osd_hold_ms(3500), 3000); // tie: the lower choice wins
+        assert_eq!(normalize_volume_osd_hold_ms(60_000), 5000);
+    }
+
+    #[test]
+    fn a_config_without_the_field_gets_the_default_and_a_stored_value_round_trips() {
+        let old = Config::parse_config("show_media = true\n").expect("old config parses");
+        assert_eq!(old.volume_osd_hold_ms, 2500);
+        let new = Config::parse_config("volume_osd_hold_ms = 4000\n").expect("new config parses");
+        assert_eq!(new.volume_osd_hold_ms, 4000);
+        let odd = Config::parse_config("volume_osd_hold_ms = 99999\n").expect("odd config parses");
+        assert_eq!(odd.volume_osd_hold_ms, 5000);
     }
 }

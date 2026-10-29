@@ -1,9 +1,18 @@
+## GxOled Advanced v0.5.2 — volume screen hand-back fixed, selectable volume-screen time
+
+- **Fix:** after turning the DAC knob GxOled came back 4–6 s late instead of the intended 2.5 s. Measured cause (60 fps video aligned with a frame log, Nova Pro Wireless `12E5`): the base station discards every host frame for about 3.5 s after a dial report, so a frame written when the 2.5 s hold ended stayed invisible. GxOled now sends the documented `0x95` ("return to the SteelSeries UI") immediately before the first frame after the hold; that frame is accepted and the native screen is gone about 2.6 s after the last report. Details and limits: `docs/VOLUME_OSD_HANDOFF.md`.
+- **New setting:** *Display → Volume screen time* (settings window) and *Volume screen time* (tray menu): 1, 1.5, 2, 2.5 (default), 3, 4 or 5 s, saved as `volume_osd_hold_ms` in `config.toml`. The duplicate-report filter follows the chosen time.
+- Windows: a second GxOled instance is refused with a message instead of two copies fighting over the OLED.
+- Windows build helper `Validate-Windows.cmd` builds in a short folder (avoids MSBuild path-length error FTK1011); repository docs reorganised under `docs/`.
+- Verified on hardware by the owner with the 2.5 s default (camera test); the other times use the same mechanism but were not individually filmed.
+
 ## GxOled Advanced v0.5.1 — DAC volume OSD handoff
 
 - Keep the native DAC volume overlay in control for 2.5 seconds after a genuine dial change. Ignore short-interval repeated HID reports of the same level, which could rearm the timer and extend handoff toward 5–6 seconds.
 - Preserve previously fixed clock/media layer cleanup, the existing settings UI geometry, and the embedded SteelClock-Go renderer.
 - Add regression tests for duplicate dial reports, changing dial levels, and new dial actions after a quiet interval.
 - Update the right-hand Windows settings label, the tray version label, and the Cargo workspace version to v0.5.1.
+- Known issue (hardware-measured 2026-10-28, fixed in v0.5.2): the panel still returned to GxOled about 4–6 s after a dial turn, because the base station discards host frames for ~3.5 s; the hold was not the cause.
 
 ## 2026-10-24 – Two-column settings recovery
 
