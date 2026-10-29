@@ -8,10 +8,13 @@
 //! procedure (see `modern_window::failed`), or a previous start never reached its first paint (crash guard), the
 //! style is switched back to Classic and saved.
 
-use std::sync::{
-    atomic::{AtomicBool, AtomicU8, Ordering},
-    mpsc::Sender,
-    OnceLock,
+use std::{
+    panic::{catch_unwind, AssertUnwindSafe},
+    sync::{
+        atomic::{AtomicBool, AtomicU8, Ordering},
+        mpsc::Sender,
+        OnceLock,
+    },
 };
 
 use gxoled_lib::Bitmap;
@@ -35,10 +38,26 @@ fn store_style(s: ConfigUiStyle) {
     STYLE.store(if s == ConfigUiStyle::Modern { MODERN } else { CLASSIC }, Ordering::Relaxed);
 }
 
+/// Run code of the modern interface that is called from the main loop (not from a window procedure, which has its
+/// own guard). A panic there must never take the whole application down: it marks the modern UI as failed, after
+/// which it is no longer touched and `poll` switches to the classic window. `None` = skipped or panicked.
+fn guarded<R>(f: impl FnOnce() -> R) -> Option<R> {
+    if modern_ui::failed() {
+        return None;
+    }
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(r) => Some(r),
+        Err(_) => {
+            modern_ui::mark_failed();
+            None
+        }
+    }
+}
+
 pub fn create(tx: Sender<MenuEvent>, config: &Config) -> Result<(), String> {
     let _ = TX.set(tx.clone());
     store_style(config.ui_style);
-    modern_ui::init(tx.clone(), config);
+    guarded(|| modern_ui::init(tx.clone(), config));
     classic::create(tx)
 }
 
@@ -52,10 +71,14 @@ pub fn open() {
         classic::open();
         return;
     }
-    match modern_ui::open() {
-        Ok(()) => {}
-        Err(err) => {
+    match guarded(modern_ui::open) {
+        Some(Ok(())) => {}
+        Some(Err(err)) => {
             eprintln!("GxOled modern settings failed: {err}; falling back to the classic window");
+            fall_back();
+            classic::open();
+        }
+        None => {
             fall_back();
             classic::open();
         }
@@ -89,23 +112,23 @@ pub fn set_style(new: ConfigUiStyle) {
     };
     store_style(new);
     classic::hide();
-    modern_ui::hide();
+    guarded(modern_ui::hide);
     open();
 }
 
 pub fn sync(config: &Config) {
     classic::sync(config);
-    modern_ui::sync(config);
+    guarded(|| modern_ui::sync(config));
 }
 
 pub fn localize(language: ConfigLanguage) {
     classic::localize(language);
-    modern_ui::localize(language);
+    guarded(|| modern_ui::localize(language));
 }
 
 pub fn set_theme(theme: ConfigTheme) {
     classic::set_theme(theme);
-    modern_ui::set_theme(theme);
+    guarded(|| modern_ui::set_theme(theme));
 }
 
 pub fn set_tray_mode(mode: ConfigUiMode) {
@@ -118,11 +141,11 @@ pub fn install_tray_hook(mode: ConfigUiMode) {
 
 pub fn preview(bitmap: &Bitmap) {
     classic::preview(bitmap);
-    modern_ui::preview(bitmap);
+    guarded(|| modern_ui::preview(bitmap));
 }
 
 pub fn set_connected(connected: bool) {
-    modern_ui::set_connected(connected);
+    guarded(|| modern_ui::set_connected(connected));
 }
 
 /// Pump window messages for every window of this thread (classic and modern alike) and notice a modern-window failure.

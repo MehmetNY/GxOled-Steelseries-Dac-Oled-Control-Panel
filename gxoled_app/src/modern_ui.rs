@@ -314,6 +314,11 @@ pub fn failed() -> bool {
     modern_window::failed()
 }
 
+/// Mark the modern UI as unusable (a panic was caught outside a window procedure).
+pub fn mark_failed() {
+    modern_window::mark_failed();
+}
+
 // ───────────────────────── updates from the application ─────────────────────────
 
 pub fn sync(config: &Config) {

@@ -93,6 +93,11 @@ pub fn failed() -> bool {
     FAILED.load(Ordering::Relaxed)
 }
 
+/// Record a failure caught by the caller (see `settings_ui::guarded`).
+pub fn mark_failed() {
+    FAILED.store(true, Ordering::Relaxed);
+}
+
 const CLASS_NAME: &str = "GxOledModernWindow2026";
 const STYLE: u32 = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
 const WM_EDITOR_SAVE: u32 = WM_APP + 1;
