@@ -82,10 +82,6 @@ fn t(en: &str, tr: &str) -> String {
     lang().t(en, tr).to_owned()
 }
 
-fn is_dark() -> bool {
-    with_bridge(|b| b.theme == ConfigTheme::Dark).unwrap_or(true)
-}
-
 // ───────────────────────── config → UI state ─────────────────────────
 
 fn snapshot(c: &Config) -> Snapshot {
@@ -312,10 +308,6 @@ pub fn open() -> Result<(), String> {
 pub fn hide() {
     modern_window::hide(Kind::Settings);
     modern_window::hide(Kind::Editor);
-}
-
-pub fn is_visible() -> bool {
-    modern_window::is_visible(Kind::Settings) || modern_window::is_visible(Kind::Editor)
 }
 
 pub fn failed() -> bool {

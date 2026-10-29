@@ -1281,11 +1281,6 @@ pub fn open() {
         }
     }
 }
-/// Whether the classic settings window is currently on screen (used by the beta style switch).
-pub fn is_visible() -> bool {
-    let hwnd = STATE.get().and_then(|state| state.lock().ok().map(|s| s.hwnd));
-    hwnd.is_some_and(|h| unsafe { IsWindowVisible(h as Handle) } != 0)
-}
 pub fn hide() {
     let hwnd = STATE.get().and_then(|state| state.lock().ok().map(|s| s.hwnd));
     if let Some(hwnd) = hwnd {
