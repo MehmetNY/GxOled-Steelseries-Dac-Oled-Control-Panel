@@ -88,6 +88,28 @@ fn main() {
             }
         }
     }
+    // Profile editor window (930 x 680 logical px).
+    let mut ed = Ui::new();
+    ed.set_size((930.0 * dpi) as u32, (680.0 * dpi) as u32, dpi);
+    for (lang, lname) in [(Lang::En, "en"), (Lang::Tr, "tr")] {
+        for (dark, tname) in [(true, "dark"), (false, "light")] {
+            for (ok, status) in [(true, "JSON is valid - 128x64 widget, refresh 50 ms."), (false, "Invalid JSON: expected `,` or `}` at line 12 column 5")] {
+                let tag = format!("editor_{}_{}_{}", lname, tname, if ok { "ok" } else { "err" });
+                if let Some(o) = &only { if !tag.contains(o.as_str()) { continue; } }
+                ed.model = UiModel {
+                    surface: Surface::Editor, lang, dark,
+                    editor_title: "matrix-001.json - matrix".into(),
+                    editor_status: status.into(), editor_status_ok: ok,
+                    ..UiModel::default()
+                };
+                ed.invalidate();
+                let f = ed.frame().unwrap();
+                let (fw, fh, rgba) = (f.width, f.height, f.rgba.to_vec());
+                image_save(&format!("{out}/{tag}.png"), fw, fh, &rgba);
+                println!("{tag}: {fw}x{fh}, text rect {:?}", ed.editor_text_rect_px());
+            }
+        }
+    }
 }
 
 fn image_save(path: &str, w: u32, h: u32, rgba: &[u8]) {

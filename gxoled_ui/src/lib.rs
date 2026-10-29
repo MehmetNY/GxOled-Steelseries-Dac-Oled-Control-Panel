@@ -6,6 +6,7 @@
 
 pub mod chrome;
 pub mod ctx;
+pub mod editor;
 pub mod engine;
 pub mod icons_data;
 pub mod ids;
@@ -19,7 +20,7 @@ use std::time::{Duration, Instant};
 use chrome::{HEADER_H, SIDEBAR_W};
 use ctx::{Ctx, Interaction};
 use engine::{Engine, Pixmap};
-use model::{Cursor, OLED_H, OLED_W, Page, UiEvent, UiModel};
+use model::{Cursor, OLED_H, OLED_W, Page, Surface, UiEvent, UiModel};
 use scene::{Hit, HitKind, Overlay, OverlayKind, Rect, Scene};
 
 /// Width (design units) the layout was drawn for; the window scales the design proportionally to this.
@@ -79,6 +80,8 @@ pub struct Ui {
     hits: Vec<Hit>,
     overlays: Vec<Overlay>,
     list_area: Option<(Rect, usize)>,
+    /// Editor surface only: where the host puts its native text control (design units).
+    text_rect: Option<Rect>,
     frame: Vec<u8>,
     scale: f32,
     events: Vec<UiEvent>,
@@ -111,6 +114,7 @@ impl Ui {
             hits: Vec::new(),
             overlays: Vec::new(),
             list_area: None,
+            text_rect: None,
             frame: Vec::new(),
             scale: 1.0,
             events: Vec::new(),
@@ -135,8 +139,17 @@ impl Ui {
         dpi.max(0.5) * (logical_w / DESIGN_W).clamp(SCALE_MIN, SCALE_MAX)
     }
 
+    /// Pixels per design unit. The settings window scales proportionally with its width; the editor is a
+    /// plain dialog and only follows the DPI.
+    fn current_scale(&self) -> f32 {
+        match self.model.surface {
+            Surface::Settings => Self::scale_for(self.size_px.0, self.dpi),
+            Surface::Editor => self.dpi,
+        }
+    }
+
     fn du(&self) -> (f32, f32, f32) {
-        let scale = Self::scale_for(self.size_px.0, self.dpi);
+        let scale = self.current_scale();
         (self.size_px.0 as f32 / scale, self.size_px.1 as f32 / scale, scale)
     }
 
@@ -156,7 +169,35 @@ impl Ui {
 
     // ───────────────────────── rendering ─────────────────────────
 
+    fn rebuild_editor(&mut self) {
+        let (w, h, scale) = self.du();
+        let mut c = Ctx {
+            sc: Scene::new(),
+            p: theme::palette(self.model.dark),
+            m: &self.model,
+            eng: &self.engine,
+            ix: Interaction { hover: self.hover, pressed: self.pressed, focus: self.focus, focus_visible: self.focus_visible },
+            list_first: 0,
+        };
+        let text = editor::build(&mut c, w, h);
+        let (svg, hits, overlays) = c.sc.finish(w, h);
+        self.hits = hits;
+        self.overlays = overlays;
+        self.list_area = None;
+        self.text_rect = Some(text);
+        self.scroll = 0.0;
+        self.max_scroll = 0.0;
+        self.base = self.engine.render(&svg, w, h, scale);
+        self.scale = scale;
+        self.dirty = false;
+        self.compose();
+    }
+
     fn rebuild(&mut self) {
+        if self.model.surface == Surface::Editor {
+            return self.rebuild_editor();
+        }
+        self.text_rect = None;
         let (w, h, scale) = self.du();
         let layout = pages::Layout::new(w, h);
         let mut pass = 0;
@@ -260,15 +301,22 @@ impl Ui {
         Some(((ov.rect.x * s) as i32, (y * s) as i32, (ov.rect.w * s).ceil() as i32 + 1, (ov.rect.h * s).ceil() as i32 + 1))
     }
 
-    /// Rect (du, content coordinates) the JSON editor's native text control should occupy.
+    /// Pixels per design unit of the last rendered frame.
     pub fn scale(&self) -> f32 {
         self.scale
+    }
+
+    /// Pixel rectangle `(x, y, w, h)` the editor's native text control should occupy (editor surface only).
+    pub fn editor_text_rect_px(&self) -> Option<(i32, i32, i32, i32)> {
+        let r = self.text_rect?;
+        let s = self.current_scale();
+        Some(((r.x * s).round() as i32, (r.y * s).round() as i32, (r.w * s).round() as i32, (r.h * s).round() as i32))
     }
 
     // ───────────────────────── input ─────────────────────────
 
     fn to_du(&self, x: f32, y: f32) -> (f32, f32) {
-        let s = Self::scale_for(self.size_px.0, self.dpi);
+        let s = self.current_scale();
         (x / s, y / s)
     }
 

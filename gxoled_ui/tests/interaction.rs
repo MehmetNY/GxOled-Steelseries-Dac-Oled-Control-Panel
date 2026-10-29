@@ -389,3 +389,72 @@ fn dpi_scaling_keeps_hit_testing_aligned() {
     ui.mouse_up(x, y);
     assert_eq!(ui.take_events(), vec![UiEvent::Action(ids::LANG_TR)]);
 }
+
+// ───────────────────────── profile editor surface ─────────────────────────
+
+fn editor(w: u32, h: u32, dpi: f32) -> Ui {
+    let mut ui = Ui::new();
+    ui.set_size(w, h, dpi);
+    ui.model = UiModel {
+        surface: gxoled_ui::model::Surface::Editor,
+        editor_title: "matrix-001.json — matrix".into(),
+        editor_status: "JSON is valid".into(),
+        ..UiModel::default()
+    };
+    ui.invalidate();
+    ui.frame().expect("frame");
+    ui
+}
+
+#[test]
+fn editor_reserves_a_text_area_and_five_actions() {
+    for (w, h, dpi) in [(930, 680, 1.0), (860, 540, 1.0), (1395, 1020, 1.5), (1860, 1360, 2.0)] {
+        let ui = editor(w, h, dpi);
+        let (x, y, tw, th) = ui.editor_text_rect_px().expect("text rect");
+        assert!(x > 0 && y > 0 && tw > 300 && th > 120, "text rect {x},{y} {tw}x{th} at {w}x{h}");
+        assert!(x + tw < w as i32 && y + th < h as i32);
+        for id in [ids::EDITOR_SAVE, ids::EDITOR_FORMAT, ids::EDITOR_IMPORT, ids::EDITOR_EXPORT, ids::EDITOR_RESET] {
+            let hit = find(&ui, id);
+            let s = dpi;
+            assert!(hit.rect.right() * s <= w as f32 + 0.5, "button {id} sticks out at {w}x{h}");
+            assert!(hit.rect.y * s >= (y + th) as f32, "button {id} overlaps the text area");
+        }
+    }
+}
+
+#[test]
+fn editor_buttons_report_actions_and_escape_closes() {
+    let mut ui = editor(930, 680, 1.0);
+    for id in [ids::EDITOR_SAVE, ids::EDITOR_RESET, ids::EDITOR_FORMAT] {
+        // The editor is not width-proportional: one design unit is one pixel at 100 % DPI.
+        let hit = find(&ui, id);
+        let (x, y) = (hit.rect.cx(), hit.rect.cy());
+        ui.mouse_down(x, y);
+        ui.mouse_up(x, y);
+        assert_eq!(ui.take_events(), vec![UiEvent::Action(id)]);
+    }
+    ui.key_down(Key::Escape);
+    assert_eq!(ui.take_events(), vec![UiEvent::Close]);
+}
+
+#[test]
+fn editor_renders_in_both_languages_and_themes_with_long_status() {
+    let mut ui = Ui::new();
+    ui.set_size(930, 680, 1.0);
+    for lang in [Lang::En, Lang::Tr] {
+        for dark in [true, false] {
+            ui.model = UiModel {
+                surface: gxoled_ui::model::Surface::Editor,
+                lang,
+                dark,
+                editor_title: "a-very-long-profile-name-that-needs-to-be-shortened-with-an-ellipsis-because-it-is-long.json".into(),
+                editor_status: "Invalid JSON: ".to_owned() + &"x".repeat(400),
+                editor_status_ok: false,
+                ..UiModel::default()
+            };
+            ui.invalidate();
+            let f = ui.frame().expect("frame");
+            assert_eq!((f.width, f.height), (930, 680));
+        }
+    }
+}

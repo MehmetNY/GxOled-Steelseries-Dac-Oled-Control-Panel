@@ -31,6 +31,16 @@ impl Lang {
     }
 }
 
+/// Which window the `Ui` draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Surface {
+    /// The seven-page settings window.
+    #[default]
+    Settings,
+    /// The profile (JSON) editor window.
+    Editor,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum Page {
     #[default]
@@ -70,6 +80,7 @@ pub struct Image {
 
 #[derive(Clone, Debug)]
 pub struct UiModel {
+    pub surface: Surface,
     pub lang: Lang,
     pub dark: bool,
     pub page: Page,
@@ -88,8 +99,11 @@ pub struct UiModel {
     /// "v0.5.3 Beta" style label for the footer / info rows.
     pub version: String,
     pub qr: Option<Image>,
-    /// Text of the JSON editor window title bar (editor kind only).
+    /// Profile name shown under the editor heading (editor surface only).
     pub editor_title: String,
+    /// Result of the last Save / Validate action; empty hides the status line.
+    pub editor_status: String,
+    pub editor_status_ok: bool,
 }
 
 pub const OLED_W: usize = 128;
@@ -98,6 +112,7 @@ pub const OLED_H: usize = 64;
 impl Default for UiModel {
     fn default() -> Self {
         Self {
+            surface: Surface::Settings,
             lang: Lang::En,
             dark: true,
             page: Page::General,
@@ -112,6 +127,8 @@ impl Default for UiModel {
             version: "v0.0.0".to_owned(),
             qr: None,
             editor_title: String::new(),
+            editor_status: String::new(),
+            editor_status_ok: true,
         }
     }
 }
